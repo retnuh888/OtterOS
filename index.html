@@ -1,0 +1,3165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>OtterOS</title>
+  <style>
+    :root { --accent: #e67a2e; }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; height: 100%; }
+    body {
+      font-family: "Segoe UI", sans-serif;
+      color: #f4f4f4;
+      background: #000;
+      overflow: hidden;
+    }
+    button, input, textarea { font: inherit; color: inherit; }
+    button { cursor: pointer; }
+    #lock {
+      position: fixed;
+      inset: 0;
+      z-index: 100;
+      display: grid;
+      place-items: center;
+      background: #000;
+      color: #fff;
+    }
+    #lock[hidden] { display: none; }
+    #lock-form { width: min(320px, calc(100vw - 48px)); text-align: center; }
+    #lock-title { margin: 0 0 18px; font-weight: 600; letter-spacing: 0.04em; }
+    #lock-face {
+      width: 72px; height: 72px; margin: 0 auto 12px; border-radius: 50%;
+      display: grid; place-items: center; background: var(--accent); font-size: 28px; overflow: hidden;
+    }
+    #lock-face img { width: 100%; height: 100%; object-fit: cover; }
+    #lock-name { margin: 0 0 16px; }
+    #lock-password, #lock-form button {
+      width: 100%; border: 0; border-radius: 12px; padding: 12px 14px;
+    }
+    #lock-password { background: rgba(255,255,255,0.08); margin-bottom: 10px; }
+    #lock-form button { background: var(--accent); color: #fff; }
+    #lock-error { min-height: 1.2em; color: #ffb4b4; font-size: 13px; }
+    #desktop {
+      position: fixed; inset: 0;
+      background: #000 center / cover no-repeat;
+    }
+    #desktop h1 {
+      position: absolute; left: 50%; top: 42%; transform: translate(-50%, -50%);
+      margin: 0; font-weight: 600; letter-spacing: 0.08em; opacity: 0.9; pointer-events: none;
+    }
+    body:not(.show-title) #desktop h1 { display: none; }
+    #desktop-icons { position: absolute; inset: 0; }
+    .desk-icon {
+      position: absolute; width: 92px; border: 0; background: transparent; color: #fff;
+      text-shadow: 0 1px 2px rgba(0,0,0,0.8); display: flex; flex-direction: column; align-items: center; gap: 6px;
+      cursor: grab; user-select: none; touch-action: none; border-radius: 10px; padding: 4px 0;
+    }
+    .desk-icon.dragging { cursor: grabbing; z-index: 3; }
+    .desk-icon.selected { background: rgba(255,255,255,0.16); }
+    #desktop.grid .desk-icon { width: 70px; gap: 2px; padding: 2px 0 3px; }
+    #desktop.grid .desk-icon .glyph { width: 30px; height: 30px; }
+    #desktop.grid .desk-icon .glyph svg,
+    #desktop.grid .desk-icon .glyph img.site-logo { width: 28px; height: 28px; border-radius: 6px; }
+    #desktop.grid .desk-icon span { font-size: 11px; line-height: 1.15; }
+    .desk-icon span { font-size: 12px; text-align: center; word-break: break-word; }
+    .glyph { width: 42px; height: 42px; display: grid; place-items: center; }
+    .glyph svg { width: 40px; height: 40px; }
+    .glyph img.site-logo { width: 36px; height: 36px; object-fit: contain; border-radius: 8px; background: #fff; }
+    .store-row .glyph { width: 32px; height: 32px; flex: none; }
+    .store-row .glyph img.site-logo { width: 28px; height: 28px; border-radius: 7px; }
+    .taskbar .icon-btn img.site-logo { width: calc(var(--task-icon, 44px) * 0.58); height: calc(var(--task-icon, 44px) * 0.58); border-radius: 6px; background: #fff; }
+    .files-window {
+      position: fixed; z-index: 12; display: flex; flex-direction: column;
+      width: min(760px, calc(100vw - 48px)); height: min(520px, calc(100vh - 120px));
+      left: 50%; top: 46%; transform: translate(-50%, -50%);
+      background: rgba(18,18,18,0.78); border: 1px solid rgba(255,255,255,0.22);
+      border-radius: 18px; box-shadow: 0 20px 60px rgba(0,0,0,0.45);
+      backdrop-filter: blur(24px); overflow: hidden;
+    }
+    .files-window[hidden] { display: none; }
+    .files-title { display: flex; align-items: center; gap: 8px; padding: 10px 12px; cursor: grab; position: relative; z-index: 3; }
+    .win-controls { display: flex; gap: 2px; flex: none; }
+    .files-window { min-width: 340px; min-height: 240px; }
+    .files-window.full {
+      left: 0 !important; top: 0 !important; right: 0 !important; bottom: 0 !important;
+      width: auto !important; height: auto !important; transform: none !important;
+      border-radius: 0; border: 0; box-shadow: none;
+    }
+    .files-window.full .resize { display: none; }
+    .window-pin { box-shadow: 0 0 0 1px rgba(255,255,255,0.35), 0 20px 60px rgba(0,0,0,0.45); }
+    .window-pin .win-pin { background: rgba(255,255,255,0.22); }
+    .resize { position: absolute; z-index: 4; }
+    .resize.n { top: 0; left: 0; right: 0; height: 6px; cursor: ns-resize; z-index: 6; }
+    .resize.s { bottom: 0; left: 12px; right: 12px; height: 8px; cursor: ns-resize; }
+    .resize.e, .resize.w { top: 42px; bottom: 12px; width: 8px; cursor: ew-resize; }
+    .resize.e { right: 0; }
+    .resize.w { left: 0; }
+    .resize.nw, .resize.ne, .resize.sw, .resize.se { width: 14px; height: 14px; z-index: 6; }
+    .resize.nw { top: 0; left: 0; cursor: nwse-resize; }
+    .resize.ne { top: 0; right: 0; cursor: nesw-resize; }
+    .resize.sw { bottom: 0; left: 0; cursor: nesw-resize; }
+    .resize.se { bottom: 0; right: 0; cursor: nwse-resize; }
+    .files-title h2 { margin: 0; flex: 1; font-size: 15px; font-weight: 600; }
+    .icon-btn, .win-btn {
+      width: 28px; height: 28px; border: 0; border-radius: 8px; background: transparent; color: inherit;
+      display: grid; place-items: center;
+    }
+    .icon-btn:hover, .win-btn:hover { background: rgba(255,255,255,0.1); }
+    .files-toolbar, .app-body { padding: 0 12px 12px; }
+    .files-toolbar { display: flex; gap: 8px; }
+    .path-label, .store-form input, .command-line input, #editor-text, .setting input[type="text"], .setting input[type="password"] {
+      border: 0; border-radius: 10px; background: rgba(255,255,255,0.08); padding: 8px 10px;
+    }
+    .path-label { flex: 1; }
+    #files-body, .store-list { overflow: auto; min-height: 0; flex: 1; }
+    .file-row, .store-row {
+      display: flex; align-items: center; gap: 10px; width: 100%; text-align: left;
+      border: 0; background: transparent; color: inherit; border-radius: 10px; padding: 8px;
+    }
+    .file-row:hover, .store-row:hover { background: rgba(255,255,255,0.06); }
+    .app-body { display: flex; flex-direction: column; gap: 8px; flex: 1; min-height: 0; overflow: auto; }
+    #editor-text { flex: 1; resize: none; min-height: 0; }
+    .command-window { background: rgba(8,10,12,0.94); }
+    .command-log {
+      flex: 1; margin: 0 12px; overflow: auto; white-space: pre-wrap; font-family: Consolas, monospace; font-size: 13px;
+    }
+    .command-line { display: flex; gap: 8px; padding: 10px 12px; }
+    .command-line input { flex: 1; }
+    .web-app-window { width: min(1040px, calc(100vw - 36px)); height: min(740px, calc(100vh - 96px)); }
+    .store-window { width: min(1100px, calc(100vw - 28px)); height: min(740px, calc(100vh - 80px)); background: #121212; color: #fff; border-color: #2b2b2b; }
+    .web-stage { position: relative; flex: 1; min-height: 0; margin: 0 8px 8px; background: #fff; border-radius: 12px; overflow: hidden; }
+    .web-stage webview, .web-stage iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; background: #fff; }
+    .browser-tabs { display: flex; gap: 4px; align-items: flex-end; padding: 0 10px; overflow: auto; min-height: 36px; }
+    .browser-tab { display: flex; align-items: center; max-width: 200px; border-radius: 8px 8px 0 0; background: rgba(255,255,255,0.06); }
+    .browser-tab.active { background: rgba(255,255,255,0.16); }
+    .browser-tab-label { border: 0; background: transparent; color: inherit; padding: 7px 4px 7px 10px; max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .tab-x { border: 0; background: transparent; color: inherit; width: 22px; height: 22px; border-radius: 6px; }
+    .tab-x:hover, .browser-bar button:hover { background: rgba(255,255,255,0.12); }
+    .browser-bar { display: flex; gap: 6px; align-items: center; padding: 8px 10px; }
+    .browser-bar input { flex: 1; border: 0; border-radius: 10px; background: rgba(255,255,255,0.08); padding: 8px 10px; color: inherit; }
+    .browser-bar button { width: 32px; height: 32px; border: 0; border-radius: 8px; background: transparent; color: inherit; }
+    .browser-stage { position: relative; flex: 1; min-height: 0; margin: 0 8px 8px; background: #fff; border-radius: 12px; overflow: hidden; }
+    .browser-stage webview, .browser-stage iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; background: #fff; }
+    .browser-stage webview[hidden], .browser-stage iframe[hidden] { display: none !important; }
+    .store-form { display: flex; flex-direction: column; gap: 8px; }
+    .store-form button, .store-row button, .settings-actions button, #editor-save {
+      border: 0; border-radius: 10px; padding: 8px 12px; background: var(--accent); color: #fff;
+    }
+    .store-row { background: rgba(255,255,255,0.05); }
+    .store-copy { flex: 1; min-width: 0; }
+    .store-copy strong, .store-copy span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .store-copy span, #store-note, .hint { opacity: 0.72; font-size: 13px; }
+    .store-remove { background: #a33b32 !important; }
+    .taskbar {
+      position: fixed; left: 0; right: 0; bottom: 0; height: var(--task-h, 64px); z-index: 40;
+      display: grid; grid-template-columns: 1fr auto 1fr; align-items: center;
+      padding: 0 12px 2px; border-radius: 0;
+      background: rgba(28,28,32,0.62); border: 0; border-top: 1px solid rgba(255,255,255,0.16);
+      backdrop-filter: blur(28px) saturate(1.5);
+    }
+    .task-left, .task-right, .task-center { display: flex; align-items: center; }
+    .task-left { justify-content: flex-start; }
+    .task-right { justify-content: flex-end; }
+    .task-center {
+      gap: 4px; padding: 5px 8px; border-radius: 16px;
+      background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.16);
+      box-shadow: 0 10px 28px rgba(0,0,0,0.28);
+    }
+    #task-apps { display: flex; align-items: center; gap: 4px; }
+    #task-apps:empty { display: none; }
+    #task-apps:not(:empty)::before {
+      content: ""; width: 1px; height: 24px; margin: 0 4px;
+      background: rgba(255,255,255,0.28);
+    }
+    .taskbar .icon-btn {
+      position: relative; width: var(--task-icon, 44px); height: var(--task-icon, 44px); border-radius: 12px;
+      transition: transform 0.12s ease, background 0.12s ease;
+    }
+    .taskbar .icon-btn svg { width: calc(var(--task-icon, 44px) * 0.5); height: calc(var(--task-icon, 44px) * 0.5); }
+    .taskbar .icon-btn:hover { background: rgba(255,255,255,0.14); }
+    .task-reveal {
+      position: absolute; inset: 0; pointer-events: none; opacity: 0;
+      background: radial-gradient(220px circle at var(--spot-x, -240px) var(--spot-y, -40px), rgba(255,255,255,0.2), transparent 70%);
+    }
+    .taskbar.spot .task-reveal { opacity: 1; }
+    .taskbar > .task-reveal { position: absolute; inset: 0; z-index: 0; pointer-events: none; }
+    body.task-small { --task-h: 48px; --task-icon: 34px; }
+    body.task-large { --task-h: 86px; --task-icon: 58px; }
+    body.task-small .task-center { padding: 3px 6px; border-radius: 12px; }
+    body.task-large .task-center { padding: 8px 12px; border-radius: 22px; }
+    body.task-small .clock-time { font-size: 12px; }
+    body.task-large .clock-time { font-size: 16px; }
+    body.task-large .clock-date { font-size: 13px; }
+    body:not(.task-date) .clock-date { display: none; }
+    #task-peek { position: fixed; left: 0; right: 0; bottom: 0; height: 14px; z-index: 86; }
+    #task-peek[hidden] { display: none; }
+    body.task-hide .taskbar { z-index: 85; transform: translateY(100%); transition: transform 0.18s ease; }
+    body.task-hide .taskbar.show { transform: none; }
+    .taskbar .icon-btn[aria-expanded="true"]::after,
+    .taskbar .task-on::after {
+      content: ""; position: absolute; left: 50%; bottom: 3px; width: 14px; height: 3px;
+      border-radius: 2px; background: currentColor; transform: translateX(-50%);
+    }
+    #clock {
+      display: flex; flex-direction: column; align-items: flex-end; justify-content: center;
+      min-width: 92px; padding: 0 8px 0 12px; line-height: 1.15;
+      border: 0; background: transparent; color: inherit;
+    }
+    .clock-time { font-size: 13px; font-weight: 650; }
+    .clock-date { font-size: 11px; opacity: 0.72; }
+    .menu {
+      position: absolute; bottom: calc(100% + 10px); left: 0; min-width: 180px; padding: 8px;
+      background: rgba(20,20,20,0.96); border-radius: 14px; border: 1px solid rgba(255,255,255,0.14);
+      display: flex; flex-direction: column; gap: 4px;
+    }
+    .menu[hidden] { display: none; }
+    .menu button, .menu input { border: 0; background: transparent; text-align: left; border-radius: 8px; padding: 8px 10px; }
+    .menu button:hover { background: rgba(255,255,255,0.08); }
+    .search-panel { width: 320px; }
+    .search-panel input { background: rgba(255,255,255,0.08); margin-bottom: 6px; }
+    #search-results { max-height: 280px; overflow: auto; }
+    .power-wrap { position: relative; }
+    #media-stage { flex: 1; min-height: 0; display: grid; place-items: center; padding: 8px; }
+    #media-stage img { max-width: 100%; max-height: 100%; object-fit: contain; }
+    .setting { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 8px 0; }
+    .accent-row { display: flex; gap: 8px; }
+    .accent { width: 28px; height: 28px; border-radius: 50%; border: 2px solid transparent; }
+    .accent.selected { border-color: #fff; }
+    .choice-row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+    .choice { border: 0; border-radius: 10px; padding: 8px 12px; background: rgba(255,255,255,0.08); color: inherit; }
+    .choice.selected { background: var(--accent); color: #fff; }
+    .context-menu {
+      position: fixed; z-index: 90; min-width: 180px; padding: 6px;
+      background: rgba(20,20,20,0.96); border-radius: 12px; border: 1px solid rgba(255,255,255,0.14);
+    }
+    .context-menu[hidden] { display: none; }
+    .context-menu button { display: block; width: 100%; border: 0; background: transparent; text-align: left; border-radius: 8px; padding: 8px 10px; }
+    .context-menu button:hover { background: rgba(255,255,255,0.08); }
+    .context-menu { max-height: min(70vh, 560px); overflow: auto; }
+    .menu-label { padding: 6px 10px 2px; font-size: 11px; letter-spacing: 0.04em; text-transform: uppercase; opacity: 0.62; }
+    .menu-rule { height: 1px; margin: 4px 6px; background: rgba(255,255,255,0.12); }
+    .ask-layer { position: fixed; inset: 0; z-index: 200; display: grid; place-items: center; background: rgba(0,0,0,0.45); }
+    .ask-layer[hidden] { display: none; }
+    .ask-card { width: min(440px, calc(100vw - 32px)); padding: 16px; border-radius: 16px; background: rgba(20,20,20,0.98); color: inherit; border: 1px solid rgba(255,255,255,0.16); display: flex; flex-direction: column; gap: 8px; }
+    .ask-card h2 { margin: 0; font-size: 16px; }
+    .ask-card p { margin: 0; font-size: 13px; opacity: 0.8; }
+    .ask-card input { border: 0; border-radius: 10px; background: rgba(255,255,255,0.08); padding: 8px 10px; color: inherit; }
+    .ask-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }
+    .ask-actions button { border: 0; border-radius: 10px; padding: 8px 12px; background: rgba(255,255,255,0.1); color: inherit; }
+    .ask-actions button[type="submit"] { background: var(--accent); color: #fff; }
+    body.light .ask-card { background: #fff; color: #1a1a1a; border-color: rgba(0,0,0,0.08); }
+    body.light .ask-card input, body.light #lock-password, body.light .path-label, body.light .store-form input,
+    body.light .command-line input, body.light #editor-text, body.light .browser-bar input, body.light .search-panel input {
+      background: rgba(255,255,255,0.82); color: #141414;
+    }
+    .file-row.selected { background: rgba(255,255,255,0.1); }
+    #media-stage audio, #media-stage video { width: min(100%, 760px); max-height: 100%; }
+    body.light { color: #1a1a1a; }
+    body.light .files-window, body.light .taskbar, body.light .menu, body.light .context-menu {
+      background: rgba(255,255,255,0.78); color: #1a1a1a; border-color: rgba(0,0,0,0.08);
+    }
+    body.light .task-center { background: rgba(255,255,255,0.72); border-color: rgba(0,0,0,0.08); box-shadow: 0 8px 22px rgba(0,0,0,0.12); }
+    body.light #task-apps:not(:empty)::before { background: rgba(0,0,0,0.2); }
+    body.light .taskbar .icon-btn:hover { background: rgba(0,0,0,0.06); }
+    body.light .path-label, body.light .store-form input, body.light .command-line input, body.light #editor-text,
+    body.light #lock-password { background: rgba(0,0,0,0.06); color: #1a1a1a; }
+    body.light .command-window { background: #f7f7f7; }
+    .store-shell { flex: 1; min-height: 0; display: flex; background: #121212; color: #fff; }
+    .store-side { width: 210px; flex: none; display: flex; flex-direction: column; gap: 4px; padding: 14px 10px; background: #18181c; border-right: 1px solid rgba(255,255,255,0.06); }
+    .store-side button { border: 0; background: transparent; color: #d0d0d0; text-align: left; border-radius: 6px; padding: 11px 14px; font-weight: 700; }
+    .store-side button[aria-selected="true"] { background: rgba(255,255,255,0.08); color: #fff; }
+    .store-main { flex: 1; min-width: 0; min-height: 0; overflow: auto; padding: 16px 18px 28px; }
+    .store-kicker { margin: 0 0 6px; letter-spacing: 0.14em; text-transform: uppercase; font-size: 12px; font-weight: 700; opacity: 0.8; }
+    .store-section-title { margin: 4px 0 12px; font-size: 22px; }
+    .store-hero { min-height: 260px; border-radius: 10px; display: flex; align-items: flex-end; justify-content: space-between; gap: 18px; padding: 28px; margin-bottom: 22px; }
+    .store-hero h3 { margin: 0 0 8px; font-size: 42px; line-height: 1; }
+    .store-hero p { margin: 0 0 16px; max-width: 460px; }
+    .store-hero-logo { width: 92px; height: 92px; flex: none; }
+    .store-hero-logo img.site-logo { width: 84px; height: 84px; border-radius: 18px; }
+    .store-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 14px; }
+    .store-card { background: #202026; border-radius: 8px; overflow: hidden; display: flex; flex-direction: column; min-height: 230px; }
+    .store-card-art { height: 112px; display: grid; place-items: center; }
+    .store-card-art .glyph { width: 64px; height: 64px; }
+    .store-card-art img.site-logo { width: 56px; height: 56px; border-radius: 12px; }
+    .store-card-body { padding: 12px; display: flex; flex-direction: column; gap: 8px; flex: 1; }
+    .store-card-body strong { font-size: 15px; }
+    .store-card-body span { opacity: 0.72; font-size: 12px; flex: 1; }
+    .store-window .store-form { display: grid; grid-template-columns: 1fr 1.4fr auto; gap: 8px; margin-bottom: 14px; }
+    .store-window .store-form input, .store-window .store-search { background: #202026; color: #fff; border: 0; border-radius: 6px; padding: 12px 14px; }
+    .store-window .store-search { width: 100%; margin: 0 0 14px; }
+    .store-window .store-form button, .store-get { background: #0074e4; color: #fff; border: 0; border-radius: 4px; padding: 10px 18px; font-weight: 700; }
+    .store-get { align-self: flex-start; }
+    .store-card-actions { display: flex; gap: 8px; }
+    .store-remove { background: transparent !important; color: #ffb4b4 !important; padding: 8px 0 !important; }
+    .store-window .store-list { overflow: visible; flex: none; }
+    #store-note { min-height: 1.2em; margin: 0 0 10px; }
+    body.light .store-window { background: #121212; color: #fff; border-color: #2b2b2b; }
+    body.light .store-window .store-form input, body.light .store-window .store-search { background: #202026; color: #fff; }
+
+
+    :root {
+      --glass-fill: linear-gradient(180deg, rgba(255,255,255,0.16), rgba(255,255,255,0.04)), rgba(6, 8, 12, 0.82);
+      --glass-line: rgba(255,255,255,0.42);
+      --glass-inset: inset 0 1px 0 rgba(255,255,255,0.55), inset 0 -1px 0 rgba(255,255,255,0.08);
+      --glass-shadow: 0 18px 50px rgba(0,0,0,0.32);
+      --glass-blur: blur(28px) saturate(1.7);
+      --move: cubic-bezier(0.22, 0.9, 0.26, 1);
+    }
+    body.light {
+      --glass-fill: linear-gradient(180deg, rgba(255,255,255,0.74), rgba(255,255,255,0.36)), rgba(255,255,255,0.32);
+      --glass-line: rgba(255,255,255,0.82);
+      --glass-inset: inset 0 1px 0 rgba(255,255,255,0.95), inset 0 -1px 0 rgba(255,255,255,0.25);
+      --glass-shadow: 0 18px 40px rgba(0,0,0,0.14);
+    }
+    .files-window,
+    body.light .files-window,
+    .command-window,
+    body.light .command-window,
+    .store-window,
+    body.light .store-window,
+    .taskbar,
+    body.light .taskbar,
+    .task-center,
+    body.light .task-center,
+    .menu,
+    body.light .menu,
+    .context-menu,
+    body.light .context-menu,
+    .ask-card,
+    body.light .ask-card,
+    #lock-form,
+    .store-card,
+    .store-hero,
+    .store-side {
+      background: var(--glass-fill);
+      color: inherit;
+      border: 1px solid var(--glass-line);
+      box-shadow: var(--glass-inset), var(--glass-shadow);
+      backdrop-filter: var(--glass-blur);
+      -webkit-backdrop-filter: var(--glass-blur);
+    }
+    .files-window { border-radius: 22px; }
+    .files-window::before,
+    .taskbar::before,
+    .menu::before,
+    .context-menu::before,
+    .ask-card::before,
+    #lock-form::before {
+      content: "";
+      position: absolute;
+      left: 0; right: 0; top: 0;
+      height: 56px;
+      border-radius: inherit;
+      pointer-events: none;
+      background: linear-gradient(180deg, rgba(255,255,255,0.34), transparent);
+    }
+    .menu::before, .context-menu::before, .ask-card::before, #lock-form::before { height: 36px; }
+    .ask-card > *, #lock-form > *, .files-title, .menu > *, .context-menu > *, .taskbar > * { position: relative; z-index: 1; }
+    body, .desk-icon, .desk-icon span, .file-row, .store-row, .menu, .menu button, .context-menu, .context-menu button,
+    .files-window, .taskbar, .clock-time, .clock-date, .store-copy span, #store-note, .hint, .menu-label,
+    .ask-card, .ask-card p, .ask-card h2, .store-kicker, .store-card-body span, .store-card-body strong,
+    #lock-name, #lock-title, #lock-clock, .files-title h2, .store-side button, .browser-tab-label {
+      color: #fff;
+      opacity: 1;
+    }
+    .desk-icon span, .clock-date, .menu-label, .ask-card p, .store-kicker, .store-card-body span, #store-note, .hint {
+      text-shadow: 0 1px 2px rgba(0,0,0,0.85);
+    }
+    input::placeholder, textarea::placeholder { color: #fff; opacity: 1; }
+    body.light, body.light .desk-icon, body.light .desk-icon span, body.light .file-row, body.light .menu,
+    body.light .menu button, body.light .context-menu, body.light .context-menu button, body.light .files-window,
+    body.light .taskbar, body.light .ask-card, body.light .ask-card p, body.light .ask-card h2,
+    body.light .store-card-body span, body.light .store-card-body strong, body.light .store-side button,
+    body.light #lock-form, body.light #lock-name, body.light #lock-title, body.light #lock-clock {
+      color: #141414;
+    }
+    body.light .desk-icon span, body.light .ask-card p, body.light .store-card-body span { text-shadow: none; }
+    body.light input::placeholder, body.light textarea::placeholder { color: #141414; opacity: 1; }
+    .taskbar { border-left: 0; border-right: 0; border-bottom: 0; border-radius: 0; }
+    .task-center { border-radius: 18px; }
+    .menu, .context-menu, .ask-card, #lock-form { position: relative; }
+    .context-menu { position: fixed; }
+    .menu { position: absolute; }
+    .store-shell, .store-main, .store-card-art, .store-card-body { background: transparent; color: inherit; }
+    .store-side { border-radius: 0; border-top: 0; border-bottom: 0; border-left: 0; box-shadow: none; }
+    .store-side button { color: inherit; border-radius: 12px; transition: background 0.18s var(--move); }
+    .store-side button[aria-selected="true"] { background: rgba(255,255,255,0.18); color: inherit; }
+    .store-hero { border-radius: 18px; min-height: 220px; }
+    .store-card { border-radius: 18px; transition: transform 0.22s var(--move); }
+    .store-card:hover { transform: translateY(-4px); }
+    .store-window .store-form input,
+    .store-window .store-search,
+    body.light .store-window .store-form input,
+    body.light .store-window .store-search,
+    .path-label, .store-form input, .command-line input, #editor-text,
+    .setting input[type="text"], .setting input[type="password"],
+    .browser-bar input, .ask-card input, .search-panel input, #lock-password,
+    body.light .path-label, body.light .store-form input, body.light .command-line input,
+    body.light #editor-text, body.light #lock-password, body.light .ask-card input {
+      background: rgba(0,0,0,0.55);
+      color: #fff;
+      border: 1px solid rgba(255,255,255,0.28);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.32);
+      border-radius: 12px;
+    }
+    .store-window .store-form button, .store-get, #lock-form button, #editor-save,
+    .settings-actions button, .ask-actions button[type="submit"], .choice.selected {
+      background: var(--accent);
+      color: #fff;
+      border: 1px solid rgba(255,255,255,0.38);
+      border-radius: 12px;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.45);
+    }
+    .choice, .ask-actions button { border-radius: 12px; border: 1px solid transparent; }
+    #lock {
+      background: rgba(0,0,0,0.22);
+      backdrop-filter: blur(26px) saturate(1.45);
+      -webkit-backdrop-filter: blur(26px) saturate(1.45);
+    }
+    #lock-form { width: min(360px, calc(100vw - 40px)); padding: 28px 22px 16px; border-radius: 28px; text-align: center; }
+    #lock-clock { margin: 0 0 2px; font-size: 46px; font-weight: 600; letter-spacing: -0.04em; line-height: 1; }
+    #lock-face { background: rgba(255,255,255,0.16); border: 1px solid var(--glass-line); box-shadow: var(--glass-inset); }
+    #lock.locking { animation: lock-in 0.48s var(--move); }
+    #lock.unlocking { animation: lock-out 0.46s var(--move) forwards; pointer-events: none; }
+    #lock.locking #lock-form { animation: card-in 0.55s var(--move); }
+    #lock.unlocking #lock-form { animation: card-out 0.4s var(--move) forwards; }
+    #lock.locking #lock-form.shake { animation: lock-shake 0.42s var(--move); }
+    .files-window { transition: border-radius 0.25s var(--move), box-shadow 0.25s var(--move); }
+    .files-window.glass-in { animation: win-in 0.28s var(--move); }
+    .files-window.glass-out { animation: win-out 0.2s ease forwards; pointer-events: none; }
+    .files-window.springing {
+      min-width: 0; min-height: 0; animation: none !important; transition: none;
+      transform: none !important; overflow: hidden;
+    }
+    .pop { animation: pop-in 0.2s var(--move); }
+    .fade-up { animation: fade-up 0.28s var(--move); }
+    .desk-icon { animation: icon-in 0.34s var(--move); transition: background 0.18s var(--move); }
+    .desk-icon::before,
+    .taskbar .icon-btn::before,
+    #battery::before {
+      content: ""; position: absolute; inset: 0; border-radius: inherit; padding: 1.5px; pointer-events: none; z-index: 2;
+      background: radial-gradient(78px circle at var(--spot-x, -120px) var(--spot-y, -120px), rgba(255,255,255,0.85), transparent 62%);
+      -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+      -webkit-mask-composite: xor;
+      mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+      mask-composite: exclude;
+      opacity: var(--glow, 0);
+    }
+    .desk-icon.dragging, .desk-icon.dragging:hover { animation: none; transform: none; transition: none; }
+    .file-row, .store-row, .browser-tab, .menu button, .context-menu button { transition: background 0.16s ease, transform 0.16s var(--move); }
+    .file-row:hover { transform: translateX(3px); }
+    .taskbar .icon-btn { transition: background 0.18s ease; }
+    #desktop h1 { animation: fade-up 0.7s var(--move); }
+    @keyframes lock-in { from { opacity: 0; } to { opacity: 1; } }
+    @keyframes lock-out { to { opacity: 0; } }
+    @keyframes card-in { from { opacity: 0; transform: translateY(22px) scale(0.96); } to { opacity: 1; transform: none; } }
+    @keyframes card-out { to { opacity: 0; transform: translateY(-18px) scale(1.04); } }
+    @keyframes lock-shake {
+      0%, 100% { transform: translateX(0); }
+      20% { transform: translateX(-10px); }
+      40% { transform: translateX(9px); }
+      60% { transform: translateX(-6px); }
+      80% { transform: translateX(4px); }
+    }
+    @keyframes win-in { from { opacity: 0; } to { opacity: 1; } }
+    @keyframes win-out { to { opacity: 0; } }
+    @keyframes pop-in { from { opacity: 0; transform: translateY(8px) scale(0.96); } to { opacity: 1; transform: none; } }
+    @keyframes fade-up { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+    @keyframes icon-in { from { opacity: 0; transform: translateY(10px) scale(0.96); } to { opacity: 1; transform: none; } }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
+    }
+
+    .set-card { display: flex; flex-direction: column; gap: 2px; padding: 12px 14px 8px; border-radius: 16px; background: rgba(0,0,0,0.28); border: 1px solid rgba(255,255,255,0.16); }
+    .set-card h3 { margin: 0 0 6px; font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: #fff; }
+    body.light .set-card { background: rgba(255,255,255,0.5); border-color: rgba(0,0,0,0.08); }
+    body.light .set-card h3 { color: #141414; }
+    input[type="checkbox"] { accent-color: var(--accent); width: 18px; height: 18px; }
+    .files-empty { margin: 36px 12px; text-align: center; color: #fff; }
+    .file-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .desk-icon span { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; line-height: 1.2; max-height: 2.4em; }
+    .file-row:hover { transform: none; background: rgba(255,255,255,0.1); }
+    .file-row.selected { background: rgba(255,255,255,0.16); }
+    .win-close:hover { background: #d64545; color: #fff; }
+    .store-hero h3 { font-size: 32px; }
+    #files-new { padding: 8px 14px; }
+    * { scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.4) transparent; }
+    ::selection { background: var(--accent); color: #fff; }
+    :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    .task-list { display: flex; flex-direction: column; gap: 8px; }
+    .task-row {
+      display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 12px;
+      background: rgba(0,0,0,0.28); border: 1px solid rgba(255,255,255,0.08);
+    }
+    .task-row strong { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .task-row span { font-size: 13px; }
+    .task-row button, .task-row input { flex: none; }
+    .task-row button { border: 0; border-radius: 8px; padding: 6px 12px; background: rgba(255,255,255,0.12); color: #fff; }
+    .task-end { background: #a33b32 !important; }
+    .health-grid { display: flex; flex-direction: column; gap: 12px; }
+    .health-stat { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; }
+    .health-stat span { font-size: 13px; }
+    .meter { height: 10px; border-radius: 99px; background: rgba(255,255,255,0.12); overflow: hidden; margin-top: 8px; }
+    .meter i { display: block; height: 100%; width: 0; background: var(--accent); border-radius: inherit; }
+    #battery {
+      display: flex; align-items: center; gap: 6px; height: 100%;
+      border: 0; background: transparent; color: inherit; padding: 0 8px 0 4px;
+    }
+    #battery[hidden] { display: none; }
+    #battery svg { width: 30px; height: 16px; display: block; }
+    #battery-text { font-size: 12px; font-weight: 650; min-width: 2.4em; }
+    body.light .task-row { background: rgba(255,255,255,0.45); border-color: rgba(0,0,0,0.06); }
+    body.light .task-row button { color: #141414; background: rgba(0,0,0,0.06); }
+    body.light .task-end { color: #fff !important; }
+    .files-split { display: flex; flex: 1; min-height: 0; gap: 8px; }
+    #files-preview {
+      width: 260px; flex: none; display: flex; flex-direction: column; align-items: center; justify-content: center;
+      gap: 10px; margin: 0 12px 12px 0; padding: 12px; border-radius: 14px; overflow: hidden;
+      background: rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.14);
+    }
+    #files-preview[hidden] { display: none; }
+    #files-preview img {
+      width: 100%; flex: 1; min-height: 0; object-fit: contain; border-radius: 8px;
+      background-color: rgba(255,255,255,0.05);
+      background-image:
+        linear-gradient(45deg, rgba(255,255,255,0.14) 25%, transparent 25%),
+        linear-gradient(-45deg, rgba(255,255,255,0.14) 25%, transparent 25%),
+        linear-gradient(45deg, transparent 75%, rgba(255,255,255,0.14) 75%),
+        linear-gradient(-45deg, transparent 75%, rgba(255,255,255,0.14) 75%);
+      background-size: 16px 16px;
+      background-position: 0 0, 0 8px, 8px -8px, -8px 0;
+    }
+    #files-preview p { margin: 0; width: 100%; font-size: 12px; text-align: center; word-break: break-word; }
+    .glyph img.file-thumb {
+      width: 36px; height: 36px; object-fit: cover; border-radius: 6px; background: rgba(255,255,255,0.12);
+    }
+    .desk-icon .glyph img.file-thumb { width: 40px; height: 40px; }
+    #desktop.grid .desk-icon .glyph img.file-thumb { width: 28px; height: 28px; }
+    #media-window { width: min(920px, calc(100vw - 40px)); height: min(680px, calc(100vh - 90px)); }
+    #media-stage { margin: 0 12px 12px; border-radius: 14px; background: #050505; }
+    #media-stage img {
+      background-color: rgba(255,255,255,0.04);
+      background-image:
+        linear-gradient(45deg, rgba(255,255,255,0.12) 25%, transparent 25%),
+        linear-gradient(-45deg, rgba(255,255,255,0.12) 25%, transparent 25%),
+        linear-gradient(45deg, transparent 75%, rgba(255,255,255,0.12) 75%),
+        linear-gradient(-45deg, transparent 75%, rgba(255,255,255,0.12) 75%);
+      background-size: 18px 18px;
+      background-position: 0 0, 0 9px, 9px -9px, -9px 0;
+    }
+  </style>
+</head>
+<body>
+  <div id="desktop">
+    <h1>OtterOS</h1>
+    <div id="desktop-icons"></div>
+  </div>
+
+  <section class="files-window" id="files-window" hidden>
+    <div class="files-title" id="files-title"><h2>OtterOS files</h2><button type="button" class="icon-btn" id="files-close" aria-label="Close"></button></div>
+    <div class="files-toolbar">
+      <button type="button" class="icon-btn" id="files-back" aria-label="Back" title="Back"></button>
+      <button type="button" class="choice" id="files-new">New</button>
+      <input class="path-label" id="files-path" type="text" value="OtterOS files" aria-label="Folder path" spellcheck="false">
+    </div>
+    <div class="files-split">
+      <div id="files-body"></div>
+      <aside id="files-preview" hidden>
+        <img id="files-preview-img" alt="">
+        <p id="files-preview-name"></p>
+      </aside>
+    </div>
+  </section>
+
+  <section class="files-window" id="editor-window" hidden>
+    <div class="files-title" id="editor-title"><h2 id="editor-name">Text</h2><button type="button" id="editor-save">Save</button><button type="button" class="icon-btn" id="editor-close" aria-label="Close"></button></div>
+    <textarea id="editor-text" spellcheck="false" aria-label="Text"></textarea>
+  </section>
+
+  <section class="files-window command-window" id="command-window" hidden>
+    <div class="files-title" id="command-title"><h2>Command Prompt</h2><button type="button" class="icon-btn" id="command-close" aria-label="Close"></button></div>
+    <div class="command-log" id="command-log">OtterOS
+Type #help.</div>
+    <form class="command-line" id="command-form">
+      <span id="command-prompt">OtterOS files&gt;</span>
+      <input id="command-input" type="text" spellcheck="false" aria-label="Command" autocomplete="off">
+    </form>
+  </section>
+
+  <section class="files-window" id="media-window" hidden>
+    <div class="files-title" id="media-title"><h2 id="media-name">File</h2><button type="button" class="icon-btn" id="media-close" aria-label="Close"></button></div>
+    <div id="media-stage"></div>
+  </section>
+
+  <section class="files-window store-window" id="store-window" hidden>
+    <div class="files-title" id="store-title"><h2>App Store</h2><button type="button" class="icon-btn" id="store-close" aria-label="Close"></button></div>
+    <div class="store-shell">
+      <aside class="store-side" aria-label="Store">
+        <button type="button" id="tab-featured" aria-selected="true">Featured</button>
+        <button type="button" id="tab-browse" aria-selected="false">Browse</button>
+        <button type="button" id="tab-library" aria-selected="false">Library</button>
+      </aside>
+      <div class="store-main">
+        <p id="store-note" aria-live="polite"></p>
+        <div id="store-featured"></div>
+        <div id="store-browse" hidden>
+          <h3 class="store-section-title">Browse</h3>
+          <form id="store-form" class="store-form">
+            <input id="store-name" type="text" maxlength="40" placeholder="App name" aria-label="App name" autocomplete="off" spellcheck="false">
+            <input id="store-url" type="text" placeholder="https://example.com" aria-label="App address" autocomplete="off" spellcheck="false">
+            <button type="submit">Add app</button>
+          </form>
+          <input id="store-search" class="store-search" type="text" placeholder="Search the store" aria-label="Search the store" autocomplete="off" spellcheck="false">
+          <div id="store-browse-grid"></div>
+        </div>
+        <div id="store-library" hidden>
+          <h3 class="store-section-title">Library</h3>
+          <div class="store-list" id="store-list"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="files-window store-window" id="tasks-window" hidden>
+    <div class="files-title" id="tasks-title"><h2>Task Manager</h2><button type="button" class="icon-btn" id="tasks-close" aria-label="Close"></button></div>
+    <div class="store-shell">
+      <aside class="store-side" aria-label="Task Manager">
+        <button type="button" id="task-tab-open" aria-selected="true">Apps open</button>
+        <button type="button" id="task-tab-startup" aria-selected="false">Startup apps</button>
+        <button type="button" id="task-tab-health" aria-selected="false">Computer health</button>
+      </aside>
+      <div class="store-main">
+        <div id="task-open"></div>
+        <div id="task-startup" hidden></div>
+        <div id="task-health" hidden></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="files-window" id="settings-window" hidden>
+    <div class="files-title" id="settings-title"><h2>Settings</h2><button type="button" class="icon-btn" id="settings-close" aria-label="Close"></button></div>
+    <div class="app-body">
+      <section class="set-card">
+        <h3>You</h3>
+        <label class="setting"><span>Your name</span><input id="profile-name" type="text" maxlength="32" aria-label="Your name"></label>
+        <label class="setting"><span>Light mode</span><input id="setting-light" type="checkbox"></label>
+      </section>
+      <section class="set-card">
+        <h3>Desktop</h3>
+        <label class="setting"><span>Show the OtterOS title</span><input id="setting-title" type="checkbox"></label>
+        <label class="setting"><span>App grid</span><input id="setting-grid" type="checkbox"></label>
+      </section>
+      <section class="set-card">
+        <h3>Taskbar</h3>
+        <div class="choice-row" id="task-size">
+          <button type="button" class="choice" data-size="small">Small</button>
+          <button type="button" class="choice" data-size="medium">Medium</button>
+          <button type="button" class="choice" data-size="large">Large</button>
+        </div>
+        <label class="setting"><span>Only show on hover</span><input id="setting-task-hide" type="checkbox"></label>
+        <label class="setting"><span>Lift icons on hover</span><input id="setting-task-lift" type="checkbox"></label>
+        <label class="setting"><span>Show the date</span><input id="setting-task-date" type="checkbox"></label>
+      </section>
+      <section class="set-card">
+        <h3>Colour</h3>
+        <div class="accent-row" id="accent-row">
+          <button type="button" class="accent selected" data-accent="#e67a2e" style="background:#e67a2e" aria-label="Otter"></button>
+          <button type="button" class="accent" data-accent="#4c8dff" style="background:#4c8dff" aria-label="Blue"></button>
+          <button type="button" class="accent" data-accent="#3dbe8a" style="background:#3dbe8a" aria-label="Green"></button>
+          <button type="button" class="accent" data-accent="#e35d9a" style="background:#e35d9a" aria-label="Pink"></button>
+          <button type="button" class="accent" data-accent="#8b7cff" style="background:#8b7cff" aria-label="Purple"></button>
+        </div>
+      </section>
+    </div>
+  </section>
+
+  <nav class="taskbar" aria-label="Taskbar">
+    <div class="task-reveal"></div>
+    <div class="task-left">
+      <div class="power-wrap" id="power-wrap">
+        <div class="menu" id="power-menu" hidden>
+          <button type="button" id="shut-down">Shut down</button>
+          <button type="button" id="restart">Restart</button>
+        </div>
+        <button type="button" class="icon-btn" id="power-btn" aria-label="Power" title="Power"></button>
+      </div>
+    </div>
+    <div class="task-center">
+      <button type="button" class="icon-btn" id="files-btn" aria-label="OtterOS files" title="OtterOS files"></button>
+      <button type="button" class="icon-btn" id="settings-btn" aria-label="Settings" title="Settings"></button>
+      <button type="button" class="icon-btn" id="store-btn" aria-label="App Store" title="App Store"></button>
+      <button type="button" class="icon-btn" id="tasks-btn" aria-label="Task Manager" title="Task Manager"></button>
+      <div class="power-wrap" id="search-wrap">
+        <div class="menu search-panel" id="search-panel" hidden>
+          <input id="search-input" type="text" placeholder="Search apps and files" aria-label="Search" autocomplete="off" spellcheck="false">
+          <div id="search-results"></div>
+        </div>
+        <button type="button" class="icon-btn" id="search-btn" aria-label="Search" title="Search"></button>
+      </div>
+      <div id="task-apps"></div>
+    </div>
+    <div class="task-right">
+      <button type="button" id="battery" hidden aria-label="Battery" title="Battery">
+        <svg viewBox="0 0 32 16" aria-hidden="true">
+          <rect x="1" y="1" width="26" height="14" rx="3" fill="none" stroke="currentColor" stroke-width="1.6"></rect>
+          <rect x="28" y="4.5" width="2.6" height="7" rx="1" fill="currentColor"></rect>
+          <rect id="battery-level" x="3" y="3" width="0" height="10" rx="1.5" fill="currentColor"></rect>
+        </svg>
+        <span id="battery-text"></span>
+      </button>
+      <button type="button" id="clock" aria-label="Clock"></button>
+    </div>
+  </nav>
+  <div id="task-peek" hidden></div>
+
+  <div class="context-menu" id="context-menu" hidden></div>
+  <div class="ask-layer" id="ask-layer" hidden>
+    <form class="ask-card" id="ask-form">
+      <h2 id="ask-title">New shortcut</h2>
+      <p id="ask-message">Name</p>
+      <input id="ask-input" type="text" autocomplete="off" spellcheck="false">
+      <p id="ask-extra-message" hidden>Opens</p>
+      <input id="ask-extra" type="text" autocomplete="off" spellcheck="false" hidden>
+      <div class="ask-actions">
+        <button type="button" id="ask-cancel">Cancel</button>
+        <button type="submit" id="ask-ok">Create</button>
+      </div>
+    </form>
+  </div>
+
+  <script>
+    const folderSvg = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 7.5A1.5 1.5 0 0 1 4.5 6H9l2 2h8.5A1.5 1.5 0 0 1 21 9.5v8A1.5 1.5 0 0 1 19.5 19h-15A1.5 1.5 0 0 1 3 17.5v-10z"></path></svg>';
+    const fileSvg = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M7 3.5h7l5 5V20a1.5 1.5 0 0 1-1.5 1.5h-10.5A1.5 1.5 0 0 1 5.5 20V5A1.5 1.5 0 0 1 7 3.5z"></path><path d="M14 3.5V9h5"></path></svg>';
+    const globeSvg = '<svg viewBox="0 0 24 24" fill="none" stroke="#8ec5ff" stroke-width="1.5"><circle cx="12" cy="12" r="8"></circle><path d="M4 12h16M12 4c2.4 2.6 2.4 13.4 0 16M12 4c-2.4 2.6-2.4 13.4 0 16"></path></svg>';
+    const ieSvg = '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="#1a73e8"></circle><text x="12" y="16.5" text-anchor="middle" font-size="13" font-family="Segoe UI, sans-serif" font-weight="700" fill="#fff">e</text></svg>';
+    const binSvg = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M5 7h14M9 7V5h6v2M8 7l1 13h6l1-13"></path></svg>';
+
+    const profile = { name: "Otter", image: "" };
+    const settings = { light: false, showTitle: false, accent: "#e67a2e", grid: false, taskSize: "medium", taskHide: false, taskLift: true, taskDate: true };
+    try { Object.assign(profile, JSON.parse(localStorage.getItem("otteros-profile") || "{}")); } catch (error) {}
+    try { Object.assign(settings, JSON.parse(localStorage.getItem("otteros-settings") || "{}")); } catch (error) {}
+
+    const webWindows = new Map();
+    const docked = new Map();
+    let filesRel = "";
+    let shellCwd = "";
+    let editorPath = "";
+    let contextTarget = null;
+
+    let stateTimer = 0;
+    function stateBody() {
+      return JSON.stringify({ settings: settings, profile: profile, layout: readIconLayout() });
+    }
+    function writeState() {
+      clearTimeout(stateTimer);
+      stateTimer = 0;
+      return fetch("/api/state", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: stateBody(),
+        keepalive: true
+      }).catch(() => {});
+    }
+    function scheduleState() {
+      clearTimeout(stateTimer);
+      stateTimer = setTimeout(writeState, 200);
+    }
+    function loadState() {
+      return fetch("/api/state").then((response) => response.ok ? response.json() : {}).catch(() => ({})).then((data) => {
+        const saved = data && typeof data === "object" ? data : {};
+        const hasDisk = saved.settings || saved.profile || saved.layout;
+        if (saved.settings && typeof saved.settings === "object") Object.assign(settings, saved.settings);
+        if (saved.profile && typeof saved.profile === "object") Object.assign(profile, saved.profile);
+        if (saved.layout && typeof saved.layout === "object") localStorage.setItem("otteros-icon-layout", JSON.stringify(saved.layout));
+        if (!hasDisk) return writeState();
+      });
+    }
+    function saveProfile() { localStorage.setItem("otteros-profile", JSON.stringify(profile)); writeState(); }
+    function saveSettings() { localStorage.setItem("otteros-settings", JSON.stringify(settings)); writeState(); }
+    function applyProfile() {
+      document.getElementById("profile-name").value = profile.name || "Otter";
+    }
+    function applySettings() {
+      document.body.classList.toggle("light", !!settings.light);
+      document.body.classList.toggle("show-title", !!settings.showTitle);
+      document.documentElement.style.setProperty("--accent", settings.accent || "#e67a2e");
+      document.getElementById("setting-light").checked = !!settings.light;
+      document.getElementById("setting-title").checked = !!settings.showTitle;
+      document.getElementById("setting-grid").checked = !!settings.grid;
+      document.getElementById("desktop").classList.toggle("grid", !!settings.grid);
+      const taskSize = settings.taskSize === "small" || settings.taskSize === "large" ? settings.taskSize : "medium";
+      settings.taskSize = taskSize;
+      document.body.classList.toggle("task-small", taskSize === "small");
+      document.body.classList.toggle("task-large", taskSize === "large");
+      document.body.classList.toggle("task-hide", !!settings.taskHide);
+      document.body.classList.toggle("task-lift", settings.taskLift !== false);
+      document.body.classList.toggle("task-date", settings.taskDate !== false);
+      document.getElementById("setting-task-hide").checked = !!settings.taskHide;
+      document.getElementById("setting-task-lift").checked = settings.taskLift !== false;
+      document.getElementById("setting-task-date").checked = settings.taskDate !== false;
+      document.getElementById("task-peek").hidden = !settings.taskHide;
+      if (!settings.taskHide) document.querySelector(".taskbar").classList.remove("show");
+      document.querySelectorAll(".choice").forEach((button) => button.classList.toggle("selected", button.dataset.size === taskSize));
+      document.querySelectorAll(".accent").forEach((button) => button.classList.toggle("selected", button.dataset.accent === settings.accent));
+      if (settings.grid) snapDesktopIcons();
+    }
+
+    function listFolder(rel) {
+      return fetch("/api/list?path=" + encodeURIComponent(rel || "")).then((response) => {
+        if (!response.ok) throw new Error("missing");
+        return response.json();
+      });
+    }
+    function mediaUrl(folder, name) {
+      const rel = folder ? folder + "/" + name : name;
+      return "/media/" + rel.split("/").map(encodeURIComponent).join("/");
+    }
+    function appId(name) {
+      const lower = String(name || "").toLowerCase();
+      if (!lower.endsWith(".app")) return "";
+      if (lower.includes("command")) return "command";
+      if (lower.includes("settings")) return "settings";
+      if (lower.includes("store")) return "store";
+      return "web";
+    }
+    function isText(name) { return String(name || "").toLowerCase().endsWith(".txt"); }
+    function isImage(name) { return /\.(png|jpe?g|webp|gif|bmp)$/i.test(name || ""); }
+    function isAudio(name) { return /\.(mp3|wav|ogg)$/i.test(name || ""); }
+    function isVideo(name) { return /\.(mp4|webm|mov)$/i.test(name || ""); }
+    function glyphFor(name, kind) {
+      const lower = String(name || "").toLowerCase();
+      if (lower === "bin") return binSvg;
+      if (kind === "folder") return folderSvg;
+      if (lower.includes("internet explorer")) return ieSvg;
+      if (appId(name) === "web" || appId(name) === "store" || lower.endsWith(".shortcut")) return globeSvg;
+      return fileSvg;
+    }
+    const siteIcons = new Map();
+    const shortcutSites = new Map();
+    function siteHost(url) {
+      try { return new URL(normalizeUrl(url)).hostname; } catch (error) { return ""; }
+    }
+    function logoChoices(url) {
+      const host = siteHost(url);
+      const href = normalizeUrl(url);
+      if (!host || !href) return [];
+      const choices = [];
+      if (siteIcons.has(host)) choices.push(siteIcons.get(host));
+      choices.push("https://www.google.com/s2/favicons?domain=" + encodeURIComponent(host) + "&sz=128");
+      try { choices.push(new URL(href).origin + "/favicon.ico"); } catch (error) {}
+      return choices;
+    }
+    function paintSiteIcon(node, url) {
+      const choices = logoChoices(url);
+      const host = siteHost(url);
+      if (!node || !choices.length) return;
+      const existing = node.querySelector("img.site-logo");
+      if (existing && existing.getAttribute("src") === choices[0]) {
+        node.dataset.siteHost = host;
+        return;
+      }
+      node.dataset.siteHost = host;
+      let index = 0;
+      const img = document.createElement("img");
+      img.className = "site-logo";
+      img.alt = "";
+      img.referrerPolicy = "no-referrer";
+      img.src = choices[0];
+      img.addEventListener("error", () => {
+        if (node.dataset.siteHost !== host) return;
+        index += 1;
+        if (index < choices.length) img.src = choices[index];
+        else node.innerHTML = globeSvg;
+      });
+      node.replaceChildren(img);
+    }
+    function rememberSiteIcon(url, icon) {
+      const host = siteHost(url);
+      if (!host || !icon) return;
+      siteIcons.set(host, icon);
+      document.querySelectorAll("[data-site-host]").forEach((node) => {
+        if (node.dataset.siteHost === host) paintSiteIcon(node, url);
+      });
+    }
+    function resolveSite(rel) {
+      const parts = String(rel || "").split("/").filter(Boolean);
+      const file = parts.pop();
+      if (!file) return Promise.resolve("");
+      return fetch(mediaUrl(parts.join("/"), file)).then((response) => response.ok ? response.json() : null).then((body) => {
+        if (!body) return "";
+        if (body.url) return body.url;
+        const target = String(body.target || "").replace(/\\/g, "/").replace(/^OtterOS files\/?/i, "");
+        const bits = target.split("/").filter(Boolean);
+        const targetFile = bits.pop();
+        if (!targetFile) return "";
+        return fetch(mediaUrl(bits.join("/"), targetFile)).then((response) => response.ok ? response.json() : null).then((app) => (app && app.url) || "");
+      }).catch(() => "");
+    }
+    function siteForShortcut(name) {
+      if (shortcutSites.has(name)) return Promise.resolve(shortcutSites.get(name));
+      return resolveSite("desktop/" + name).then((url) => {
+        shortcutSites.set(name, url || "");
+        return url || "";
+      });
+    }
+
+    function normalizeUrl(input) {
+      let url = String(input || "").trim();
+      if (!url) return "";
+      if (!/^https?:\/\//i.test(url)) url = "https://" + url;
+      try {
+        const parsed = new URL(url);
+        if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return "";
+        return parsed.href;
+      } catch (error) { return ""; }
+    }
+    function safeAppFile(name) {
+      const clean = String(name || "").replace(/[\\/:*?"<>|]/g, " ").replace(/\s+/g, " ").trim().slice(0, 40);
+      if (!clean || clean === "." || clean === "..") return "";
+      return /\.app$/i.test(clean) ? clean : clean + ".app";
+    }
+
+    const closeSvg = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M7 7l10 10M17 7L7 17"></path></svg>';
+    const backSvg = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 6l-6 6 6 6"></path></svg>';
+    const pinSvg = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 4h6l-1 6 3 3v2H7v-2l3-3V4zM12 15v5"></path></svg>';
+    const minSvg = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 17h14"></path></svg>';
+    const fullSvg = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="5" y="5" width="14" height="14" rx="1.5"></rect></svg>';
+    const restoreSvg = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="8" y="8" width="11" height="11" rx="1.5"></rect><path d="M8 12V5h11v8"></path></svg>';
+
+    function raiseWindow(windowEl) {
+      if (!windowEl || windowEl.hidden) return;
+      const windows = [...document.querySelectorAll(".files-window")].filter((el) => !el.hidden);
+      const full = windows.filter((el) => el.classList.contains("full") && el !== windowEl);
+      const pins = windows.filter((el) => !el.classList.contains("full") && el.classList.contains("window-pin") && el !== windowEl);
+      const rest = windows.filter((el) => !el.classList.contains("full") && !el.classList.contains("window-pin") && el !== windowEl);
+      if (windowEl.classList.contains("full")) full.push(windowEl);
+      else if (windowEl.classList.contains("window-pin")) pins.push(windowEl);
+      else rest.push(windowEl);
+      rest.forEach((el, index) => { el.style.zIndex = String(12 + index); });
+      pins.forEach((el, index) => { el.style.zIndex = String(30 + index); });
+      full.forEach((el, index) => { el.style.zIndex = String(80 + index); });
+    }
+
+    const motion = new Map();
+    const lifts = new Map();
+    let motionFrame = 0;
+    let motionLast = 0;
+    let launchAnchor = null;
+    let launchAt = 0;
+    const springK = 900;
+    const springC = 32;
+    function prefersStill() {
+      return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    }
+    function dockButton(el) {
+      const pins = { "files-window": "files-btn", "settings-window": "settings-btn", "store-window": "store-btn", "tasks-window": "tasks-btn" };
+      if (pins[el.id]) return document.getElementById(pins[el.id]);
+      return docked.get(el) || null;
+    }
+    function isHiding(el) {
+      const state = motion.get(el);
+      return !!(state && state.hiding);
+    }
+    function anchorBox(node) {
+      if (!node || !node.isConnected || !node.getBoundingClientRect) return null;
+      const rect = node.getBoundingClientRect();
+      if (rect.width < 2 || rect.height < 2) return null;
+      return { x: rect.left, y: rect.top, w: rect.width, h: rect.height, o: 0 };
+    }
+    function takeAnchor(explicit) {
+      const recent = launchAnchor && performance.now() - launchAt < 800 ? launchAnchor : null;
+      launchAnchor = null;
+      return explicit || recent || null;
+    }
+    function boxFromStyle(el) {
+      const x = parseFloat(el.style.left);
+      const y = parseFloat(el.style.top);
+      const w = parseFloat(el.style.width);
+      const h = parseFloat(el.style.height);
+      if (![x, y, w, h].every(Number.isFinite) || w < 80 || h < 60) return null;
+      return { x: x, y: y, w: w, h: h, o: 1 };
+    }
+    function placeWindow(el, box) {
+      el.style.transform = "none";
+      el.style.left = box.x + "px";
+      el.style.top = box.y + "px";
+      el.style.width = Math.max(8, box.w) + "px";
+      el.style.height = Math.max(8, box.h) + "px";
+      el.style.opacity = String(Math.max(0, Math.min(1, box.o)));
+    }
+    function writeRest(el, rest) {
+      if (!rest) return;
+      el.style.transform = "none";
+      el.style.left = rest.x + "px";
+      el.style.top = rest.y + "px";
+      el.style.width = rest.w + "px";
+      el.style.height = rest.h + "px";
+    }
+    function flipVelocity(state) {
+      ["x", "y", "w", "h", "o"].forEach((key) => { state.vel[key] *= -0.45; });
+    }
+    function integrate(value, velocity, target, dt, k, c) {
+      const force = -k * (value - target) - c * velocity;
+      const nextV = velocity + force * dt;
+      return [value + nextV * dt, nextV];
+    }
+    function releaseMotion(el, mode) {
+      const state = motion.get(el);
+      if (!state) return;
+      motion.delete(el);
+      const box = mode === "rest" ? state.rest : state.pos;
+      writeRest(el, box);
+      el.style.opacity = "";
+      el.style.pointerEvents = "";
+      el.classList.remove("springing");
+      el.style.zIndex = "";
+    }
+    function finishMotion(state) {
+      const el = state.el;
+      motion.delete(el);
+      el.classList.remove("springing");
+      el.style.pointerEvents = "";
+      el.style.zIndex = "";
+      if (state.hiding) {
+        el.hidden = true;
+        el.style.opacity = "";
+        writeRest(el, state.rest);
+        paintDock(el, !!state.hiding.keepDock);
+        return;
+      }
+      writeRest(el, state.rest);
+      el.style.opacity = "";
+      raiseWindow(el);
+    }
+    function kickMotion() {
+      if (motionFrame) return;
+      motionLast = 0;
+      motionFrame = requestAnimationFrame(stepMotion);
+    }
+    function stepMotion(now) {
+      const dt = motionLast ? Math.min(0.032, (now - motionLast) / 1000) : 0.016;
+      motionLast = now;
+      motion.forEach((state) => {
+        const el = state.el;
+        let calm = true;
+        ["x", "y", "w", "h", "o"].forEach((key) => {
+          const soft = key === "o";
+          const pair = integrate(state.pos[key], state.vel[key], state.target[key], dt, soft ? 760 : springK, soft ? 46 : springC);
+          let value = pair[0];
+          let velocity = pair[1];
+          if (soft) {
+            value = Math.max(0, Math.min(1, value));
+            if (value === 0 || value === 1) velocity = 0;
+          }
+          state.pos[key] = value;
+          state.vel[key] = velocity;
+          const gap = Math.abs(state.target[key] - value);
+          const speed = Math.abs(velocity);
+          if (gap > (soft ? 0.02 : 0.7) || speed > (soft ? 0.04 : 6)) calm = false;
+        });
+        placeWindow(el, state.pos);
+        el.style.zIndex = "82";
+        el.style.pointerEvents = state.hiding ? "none" : "";
+        if (calm || now - state.born > 420) finishMotion(state);
+      });
+      lifts.forEach((item, el) => {
+        if (!el.isConnected || el.classList.contains("dragging")) {
+          lifts.delete(el);
+          return;
+        }
+        const scale = integrate(item.s, item.vs, item.ts, dt, 720, 28);
+        const rise = integrate(item.y, item.vy, item.ty, dt, 720, 28);
+        item.s = scale[0];
+        item.vs = scale[1];
+        item.y = rise[0];
+        item.vy = rise[1];
+        el.style.transform = "translateY(" + item.y.toFixed(2) + "px) scale(" + item.s.toFixed(4) + ")";
+        const settled = Math.abs(item.s - item.ts) < 0.004 && Math.abs(item.y - item.ty) < 0.2 && Math.abs(item.vs) < 0.02 && Math.abs(item.vy) < 2;
+        if (settled && item.ts === 1 && item.ty === 0) {
+          el.style.transform = "";
+          lifts.delete(el);
+        }
+      });
+      if (motion.size || lifts.size) motionFrame = requestAnimationFrame(stepMotion);
+      else motionFrame = 0;
+    }
+    function liftTo(el, scale, y) {
+      if (!el || prefersStill()) return;
+      let item = lifts.get(el);
+      if (!item) {
+        item = { s: 1, y: 0, vs: 0, vy: 0, ts: 1, ty: 0 };
+        lifts.set(el, item);
+      }
+      item.ts = scale;
+      item.ty = y;
+      kickMotion();
+    }
+    function paintGlow(root, event) {
+      const bounds = root.getBoundingClientRect();
+      root.style.setProperty("--spot-x", (event.clientX - bounds.left) + "px");
+      root.style.setProperty("--spot-y", (event.clientY - bounds.top) + "px");
+      root.querySelectorAll(".desk-icon, .icon-btn, #battery").forEach((el) => {
+        const rect = el.getBoundingClientRect();
+        el.style.setProperty("--spot-x", (event.clientX - rect.left) + "px");
+        el.style.setProperty("--spot-y", (event.clientY - rect.top) + "px");
+        const dist = Math.hypot(event.clientX - (rect.left + rect.width / 2), event.clientY - (rect.top + rect.height / 2));
+        el.style.setProperty("--glow", Math.max(0, 1 - dist / 118).toFixed(3));
+      });
+    }
+    document.addEventListener("pointerdown", (event) => {
+      const source = event.target.closest && event.target.closest("button, .desk-icon, .file-row");
+      if (!source || source.closest(".files-title") || source.closest(".resize")) return;
+      launchAnchor = source;
+      launchAt = performance.now();
+    }, true);
+    document.getElementById("desktop").addEventListener("pointermove", (event) => paintGlow(document.getElementById("desktop"), event));
+    document.getElementById("desktop").addEventListener("pointerleave", () => {
+      document.querySelectorAll(".desk-icon").forEach((el) => el.style.setProperty("--glow", "0"));
+    });
+    document.querySelector(".taskbar").addEventListener("pointermove", (event) => {
+      event.currentTarget.classList.add("spot");
+      paintGlow(event.currentTarget, event);
+    });
+    document.querySelector(".taskbar").addEventListener("pointerleave", (event) => {
+      event.currentTarget.classList.remove("spot");
+      event.currentTarget.querySelectorAll(".icon-btn, #battery").forEach((el) => el.style.setProperty("--glow", "0"));
+    });
+    document.getElementById("desktop").addEventListener("pointerover", (event) => {
+      const icon = event.target.closest(".desk-icon");
+      if (!icon || icon.classList.contains("dragging")) return;
+      const lift = settings.taskLift !== false;
+      liftTo(icon, lift ? 1.06 : 1, lift ? -4 : 0);
+    });
+    document.getElementById("desktop").addEventListener("pointerout", (event) => {
+      const icon = event.target.closest(".desk-icon");
+      if (!icon || (event.relatedTarget && icon.contains(event.relatedTarget))) return;
+      liftTo(icon, 1, 0);
+    });
+    document.querySelector(".taskbar").addEventListener("pointerover", (event) => {
+      const icon = event.target.closest(".icon-btn");
+      if (!icon) return;
+      const lift = settings.taskLift !== false;
+      liftTo(icon, lift ? 1.08 : 1, lift ? -5 : 0);
+    });
+    document.querySelector(".taskbar").addEventListener("pointerout", (event) => {
+      const icon = event.target.closest(".icon-btn");
+      if (!icon || (event.relatedTarget && icon.contains(event.relatedTarget))) return;
+      liftTo(icon, 1, 0);
+    });
+
+    const hideTimers = new WeakMap();
+    function openWindow(windowEl, explicitAnchor) {
+      if (!windowEl) return;
+      const pending = hideTimers.get(windowEl);
+      if (pending) { clearTimeout(pending); hideTimers.delete(windowEl); }
+      const state = motion.get(windowEl);
+      const wasHidden = windowEl.hidden || (state && state.hiding);
+      windowEl.classList.remove("glass-in", "glass-out");
+      windowEl.hidden = false;
+      raiseWindow(windowEl);
+      paintDock(windowEl, true);
+      const anchorNode = takeAnchor(wasHidden ? explicitAnchor : null);
+      if (!wasHidden && !state) return;
+      let rest = (state && state.rest) || boxFromStyle(windowEl);
+      if (!rest) {
+        windowEl.style.opacity = "0";
+        const rect = windowEl.getBoundingClientRect();
+        rest = { x: rect.left, y: rect.top, w: rect.width, h: rect.height, o: 1 };
+      }
+      if (prefersStill()) {
+        motion.delete(windowEl);
+        writeRest(windowEl, rest);
+        windowEl.style.opacity = "";
+        windowEl.classList.remove("springing");
+        return;
+      }
+      if (state && state.hiding) {
+        state.rest = rest;
+        flipVelocity(state);
+        state.hiding = null;
+        state.target = { x: rest.x, y: rest.y, w: rest.w, h: rest.h, o: 1 };
+        state.born = performance.now();
+        windowEl.classList.add("springing");
+        return;
+      }
+      if (state) {
+        state.target = { x: rest.x, y: rest.y, w: rest.w, h: rest.h, o: 1 };
+        state.rest = rest;
+        return;
+      }
+      const from = anchorBox(anchorNode) || anchorBox(dockButton(windowEl)) || {
+        x: rest.x + rest.w * 0.16,
+        y: rest.y + rest.h * 0.16,
+        w: Math.max(28, rest.w * 0.62),
+        h: Math.max(28, rest.h * 0.62),
+        o: 0
+      };
+      motion.set(windowEl, {
+        el: windowEl,
+        pos: { x: from.x, y: from.y, w: from.w, h: from.h, o: 0 },
+        vel: { x: 0, y: 0, w: 0, h: 0, o: 0 },
+        target: { x: rest.x, y: rest.y, w: rest.w, h: rest.h, o: 1 },
+        rest: rest,
+        hiding: null,
+        born: performance.now()
+      });
+      windowEl.classList.add("springing");
+      placeWindow(windowEl, motion.get(windowEl).pos);
+      kickMotion();
+    }
+    function hideWindow(windowEl, keepDock) {
+      if (!windowEl) return;
+      const pending = hideTimers.get(windowEl);
+      if (pending) { clearTimeout(pending); hideTimers.delete(windowEl); }
+      const state = motion.get(windowEl);
+      if (windowEl.hidden && !state) {
+        if (!keepDock) paintDock(windowEl, false);
+        return;
+      }
+      let rest = (state && state.rest) || boxFromStyle(windowEl);
+      const visual = state ? state.pos : null;
+      const rect = windowEl.getBoundingClientRect();
+      const start = visual || {
+        x: rect.left,
+        y: rect.top,
+        w: rect.width,
+        h: rect.height,
+        o: windowEl.style.opacity === "" ? 1 : parseFloat(windowEl.style.opacity) || 1
+      };
+      if (windowEl.classList.contains("full")) {
+        try {
+          const frame = JSON.parse(windowEl.dataset.frame || "null");
+          if (frame) rest = { x: parseFloat(frame.left), y: parseFloat(frame.top), w: parseFloat(frame.width), h: parseFloat(frame.height), o: 1 };
+        } catch (error) {}
+        windowEl.classList.remove("full");
+        const button = windowEl.querySelector(".win-full");
+        if (button) {
+          button.innerHTML = fullSvg;
+          button.title = "Full screen";
+          button.setAttribute("aria-label", "Full screen");
+        }
+        delete windowEl.dataset.frame;
+      }
+      if (!rest || !Number.isFinite(rest.w)) rest = { x: start.x, y: start.y, w: start.w, h: start.h, o: 1 };
+      const dock = anchorBox(dockButton(windowEl)) || { x: window.innerWidth / 2 - 24, y: window.innerHeight - 52, w: 46, h: 36, o: 0 };
+      dock.o = 0;
+      if (prefersStill()) {
+        motion.delete(windowEl);
+        windowEl.classList.remove("springing");
+        windowEl.hidden = true;
+        windowEl.style.opacity = "";
+        writeRest(windowEl, rest);
+        paintDock(windowEl, !!keepDock);
+        return;
+      }
+      if (state) {
+        const turning = !state.hiding;
+        state.rest = rest;
+        state.hiding = { keepDock: !!keepDock };
+        state.target = dock;
+        state.born = performance.now();
+        if (turning) flipVelocity(state);
+        windowEl.classList.add("springing");
+        kickMotion();
+        return;
+      }
+      motion.set(windowEl, {
+        el: windowEl,
+        pos: { x: start.x, y: start.y, w: start.w, h: start.h, o: start.o },
+        vel: { x: 0, y: 0, w: 0, h: 0, o: 0 },
+        target: dock,
+        rest: rest,
+        hiding: { keepDock: !!keepDock },
+        born: performance.now()
+      });
+      windowEl.classList.add("springing");
+      placeWindow(windowEl, motion.get(windowEl).pos);
+      kickMotion();
+    }
+    function closeWindow(windowEl) { hideWindow(windowEl, false); }
+    function minimizeWindow(windowEl) { hideWindow(windowEl, true); }
+    function toggleWindow(windowEl, anchor) {
+      if (windowEl.hidden || isHiding(windowEl)) openWindow(windowEl, anchor);
+      else minimizeWindow(windowEl);
+    }
+    function paintDock(windowEl, open) {
+      const taskPins = { "files-window": "files-btn", "settings-window": "settings-btn", "store-window": "store-btn", "tasks-window": "tasks-btn" };
+      const taskPin = taskPins[windowEl.id];
+      if (taskPin) {
+        document.getElementById(taskPin).setAttribute("aria-expanded", windowEl.hidden ? "false" : "true");
+        return;
+      }
+      let button = docked.get(windowEl);
+      if (!open) {
+        if (button) button.remove();
+        docked.delete(windowEl);
+        return;
+      }
+      if (!button) {
+        button = document.createElement("button");
+        button.type = "button";
+        button.className = "icon-btn";
+        button.addEventListener("click", (event) => toggleWindow(windowEl, event.currentTarget));
+        document.getElementById("task-apps").appendChild(button);
+        docked.set(windowEl, button);
+      }
+      button.classList.toggle("task-on", !windowEl.hidden);
+      const label = (windowEl.querySelector("h2") || {}).textContent || "App";
+      button.title = label;
+      button.setAttribute("aria-label", label);
+      const site = windowEl.dataset.url || "";
+      if (windowEl.classList.contains("browser-window")) button.innerHTML = ieSvg;
+      else if (site) paintSiteIcon(button, site);
+      else if (!button.querySelector("img") && !button.querySelector("svg")) button.textContent = label.slice(0, 1);
+    }
+    function ensureFrame(windowEl) {
+      const rect = windowEl.getBoundingClientRect();
+      windowEl.style.transform = "none";
+      windowEl.style.left = rect.left + "px";
+      windowEl.style.top = rect.top + "px";
+      windowEl.style.width = rect.width + "px";
+      windowEl.style.height = rect.height + "px";
+    }
+    function toggleFull(windowEl) {
+      releaseMotion(windowEl, "rest");
+      const button = windowEl.querySelector(".win-full");
+      if (windowEl.classList.contains("full")) {
+        windowEl.classList.remove("full");
+        try {
+          const frame = JSON.parse(windowEl.dataset.frame || "null");
+          if (frame) {
+            windowEl.style.transform = "none";
+            windowEl.style.left = frame.left;
+            windowEl.style.top = frame.top;
+            windowEl.style.width = frame.width;
+            windowEl.style.height = frame.height;
+          }
+        } catch (error) {}
+        delete windowEl.dataset.frame;
+        if (button) {
+          button.innerHTML = fullSvg;
+          button.title = "Full screen";
+          button.setAttribute("aria-label", "Full screen");
+        }
+        return;
+      }
+      const rect = windowEl.getBoundingClientRect();
+      windowEl.dataset.frame = JSON.stringify({
+        left: rect.left + "px",
+        top: rect.top + "px",
+        width: rect.width + "px",
+        height: rect.height + "px"
+      });
+      windowEl.classList.add("full");
+      if (button) {
+        button.innerHTML = restoreSvg;
+        button.title = "Restore";
+        button.setAttribute("aria-label", "Restore");
+      }
+    }
+    function togglePin(windowEl) {
+      const on = windowEl.classList.toggle("window-pin");
+      const button = windowEl.querySelector(".win-pin");
+      if (button) {
+        button.setAttribute("aria-pressed", on ? "true" : "false");
+        button.title = on ? "Unpin" : "Pin";
+        button.setAttribute("aria-label", on ? "Unpin" : "Pin");
+      }
+      if (!windowEl.hidden) raiseWindow(windowEl);
+    }
+    function bindResize(windowEl) {
+      if (windowEl.querySelector(".resize")) return;
+      ["n", "s", "e", "w", "nw", "ne", "sw", "se"].forEach((edge) => {
+        const handle = document.createElement("div");
+        handle.className = "resize " + edge;
+        handle.setAttribute("aria-hidden", "true");
+        handle.addEventListener("pointerdown", (event) => {
+          if (event.button !== 0 || windowEl.classList.contains("full")) return;
+          event.preventDefault();
+          event.stopPropagation();
+          releaseMotion(windowEl, "now");
+          ensureFrame(windowEl);
+          const rect = windowEl.getBoundingClientRect();
+          const start = { x: event.clientX, y: event.clientY, left: rect.left, top: rect.top, width: rect.width, height: rect.height };
+          function move(ev) {
+            const dx = ev.clientX - start.x;
+            const dy = ev.clientY - start.y;
+            let left = start.left;
+            let top = start.top;
+            let width = start.width;
+            let height = start.height;
+            if (edge.includes("e")) width = start.width + dx;
+            if (edge.includes("s")) height = start.height + dy;
+            if (edge.includes("w")) { width = start.width - dx; left = start.left + dx; }
+            if (edge.includes("n")) { height = start.height - dy; top = start.top + dy; }
+            if (width < 340) {
+              if (edge.includes("w")) left -= 340 - width;
+              width = 340;
+            }
+            if (height < 240) {
+              if (edge.includes("n")) top -= 240 - height;
+              height = 240;
+            }
+            width = Math.min(width, window.innerWidth - 8);
+            height = Math.min(height, window.innerHeight - 8);
+            left = Math.max(0, Math.min(left, window.innerWidth - 80));
+            top = Math.max(0, Math.min(top, window.innerHeight - 48));
+            windowEl.style.left = left + "px";
+            windowEl.style.top = top + "px";
+            windowEl.style.width = width + "px";
+            windowEl.style.height = height + "px";
+          }
+          function up() {
+            document.removeEventListener("pointermove", move);
+            document.removeEventListener("pointerup", up);
+          }
+          document.addEventListener("pointermove", move);
+          document.addEventListener("pointerup", up);
+        });
+        windowEl.appendChild(handle);
+      });
+    }
+    function addWindowControls(windowEl) {
+      const title = windowEl.querySelector(".files-title");
+      if (!title || title.querySelector(".win-min")) {
+        bindResize(windowEl);
+        return;
+      }
+      const controls = document.createElement("div");
+      controls.className = "win-controls";
+      const pin = document.createElement("button");
+      pin.type = "button";
+      pin.className = "win-btn win-pin";
+      pin.title = "Pin";
+      pin.setAttribute("aria-label", "Pin");
+      pin.setAttribute("aria-pressed", "false");
+      pin.innerHTML = pinSvg;
+      const min = document.createElement("button");
+      min.type = "button";
+      min.className = "win-btn win-min";
+      min.title = "Minimise";
+      min.setAttribute("aria-label", "Minimise");
+      min.innerHTML = minSvg;
+      const full = document.createElement("button");
+      full.type = "button";
+      full.className = "win-btn win-full";
+      full.title = "Full screen";
+      full.setAttribute("aria-label", "Full screen");
+      full.innerHTML = fullSvg;
+      pin.addEventListener("click", () => togglePin(windowEl));
+      min.addEventListener("click", () => minimizeWindow(windowEl));
+      full.addEventListener("click", () => toggleFull(windowEl));
+      controls.append(pin, min, full);
+      const closeBtn = title.querySelector("[aria-label='Close']");
+      if (closeBtn) {
+        closeBtn.classList.add("win-btn", "win-close");
+        closeBtn.innerHTML = closeSvg;
+        title.insertBefore(controls, closeBtn);
+      }
+      else title.appendChild(controls);
+      bindResize(windowEl);
+    }
+    function bindDrag(title, windowEl) {
+      let drag = null;
+      title.addEventListener("pointerdown", (event) => {
+        if (event.button !== 0 || event.target.closest("button, input, .resize")) return;
+        releaseMotion(windowEl, "now");
+        if (windowEl.classList.contains("full")) {
+          const wide = windowEl.getBoundingClientRect().width || window.innerWidth;
+          const ratio = event.clientX / wide;
+          toggleFull(windowEl);
+          const restored = windowEl.getBoundingClientRect();
+          windowEl.style.left = Math.max(0, event.clientX - restored.width * ratio) + "px";
+          windowEl.style.top = Math.max(0, event.clientY - 18) + "px";
+        }
+        const rect = windowEl.getBoundingClientRect();
+        windowEl.style.transform = "none";
+        windowEl.style.left = rect.left + "px";
+        windowEl.style.top = rect.top + "px";
+        drag = { dx: event.clientX - rect.left, dy: event.clientY - rect.top };
+        title.setPointerCapture(event.pointerId);
+      });
+      title.addEventListener("pointermove", (event) => {
+        if (!drag) return;
+        windowEl.style.left = event.clientX - drag.dx + "px";
+        windowEl.style.top = event.clientY - drag.dy + "px";
+      });
+      title.addEventListener("pointerup", () => { drag = null; });
+      title.addEventListener("dblclick", (event) => {
+        if (event.target.closest("button, input")) return;
+        toggleFull(windowEl);
+      });
+    }
+    document.addEventListener("pointerdown", (event) => {
+      const windowEl = event.target.closest && event.target.closest(".files-window");
+      if (windowEl && !windowEl.hidden) raiseWindow(windowEl);
+    }, true);
+
+    function mountWeb(stage, url) {
+      stage.replaceChildren();
+      if (window.otterDesktop) {
+        const view = document.createElement("webview");
+        view.setAttribute("partition", "persist:otter-web");
+        view.setAttribute("allowpopups", "true");
+        view.addEventListener("page-favicon-updated", (event) => {
+          const icons = event.favicons || [];
+          const icon = icons[icons.length - 1] || icons[0];
+          if (icon) rememberSiteIcon(url, icon);
+        });
+        view.src = url;
+        stage.appendChild(view);
+        return;
+      }
+      const frame = document.createElement("iframe");
+      frame.title = url;
+      frame.src = url;
+      stage.appendChild(frame);
+    }
+    function openWebApp(title, url) {
+      const href = normalizeUrl(url);
+      const label = String(title || "App").replace(/\.app$/i, "").trim() || "App";
+      if (!href) return false;
+      const key = label.toLowerCase();
+      let windowEl = webWindows.get(key);
+      if (!windowEl || !windowEl.isConnected) {
+        windowEl = document.createElement("section");
+        windowEl.className = "files-window web-app-window";
+        windowEl.hidden = true;
+        windowEl.innerHTML = '<div class="files-title"><h2></h2><button type="button" class="icon-btn" aria-label="Close">×</button></div><div class="web-stage"></div>';
+        windowEl.querySelector("h2").textContent = label;
+        document.body.appendChild(windowEl);
+        addWindowControls(windowEl);
+        bindDrag(windowEl.querySelector(".files-title"), windowEl);
+        windowEl.querySelector("[aria-label='Close']").addEventListener("click", () => closeWindow(windowEl));
+        webWindows.set(key, windowEl);
+      }
+      if (windowEl.dataset.url !== href) {
+        windowEl.dataset.url = href;
+        mountWeb(windowEl.querySelector(".web-stage"), href);
+      }
+      openWindow(windowEl);
+      return true;
+    }
+    let browserWindow = null;
+    const browserTabs = [];
+    let browserActive = 0;
+    function browserTitle(tab) {
+      if (tab.title) return tab.title;
+      try { return new URL(tab.url).hostname.replace(/^www\./, ""); } catch (error) { return "New tab"; }
+    }
+    function ensureBrowser() {
+      if (browserWindow && browserWindow.isConnected) return;
+      browserWindow = document.createElement("section");
+      browserWindow.className = "files-window web-app-window browser-window";
+      browserWindow.hidden = true;
+      const title = document.createElement("div");
+      title.className = "files-title";
+      const heading = document.createElement("h2");
+      heading.textContent = "Internet Explorer";
+      const close = document.createElement("button");
+      close.type = "button";
+      close.className = "icon-btn";
+      close.setAttribute("aria-label", "Close");
+      close.textContent = "\u00d7";
+      title.append(heading, close);
+      const tabs = document.createElement("div");
+      tabs.className = "browser-tabs";
+      const bar = document.createElement("form");
+      bar.className = "browser-bar";
+      function barButton(label, act) {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.dataset.act = act;
+        button.setAttribute("aria-label", label);
+        button.textContent = label;
+        return button;
+      }
+      const back = barButton("\u2039", "back");
+      const forward = barButton("\u203a", "forward");
+      const reload = barButton("\u21bb", "reload");
+      const input = document.createElement("input");
+      input.type = "text";
+      input.setAttribute("aria-label", "Address");
+      input.spellcheck = false;
+      input.autocomplete = "off";
+      input.placeholder = "Search or type an address";
+      const newer = barButton("+", "new");
+      bar.append(back, forward, reload, input, newer);
+      const stage = document.createElement("div");
+      stage.className = "browser-stage";
+      browserWindow.append(title, tabs, bar, stage);
+      document.body.appendChild(browserWindow);
+      addWindowControls(browserWindow);
+      bindDrag(title, browserWindow);
+      close.addEventListener("click", () => closeWindow(browserWindow));
+      bar.addEventListener("submit", (event) => {
+        event.preventDefault();
+        const href = normalizeUrl(input.value);
+        const tab = browserTabs[browserActive];
+        if (!href || !tab) return;
+        tab.url = href;
+        tab.title = "";
+        if (tab.view) tab.view.src = href;
+        paintBrowserTabs();
+      });
+      back.addEventListener("click", () => browserNav("back"));
+      forward.addEventListener("click", () => browserNav("forward"));
+      reload.addEventListener("click", () => browserNav("reload"));
+      newer.addEventListener("click", () => addBrowserTab("https://www.google.com"));
+    }
+    function loadBrowserView(tab) {
+      const stage = browserWindow.querySelector(".browser-stage");
+      if (!tab.view) {
+        let view;
+        if (window.otterDesktop) {
+          view = document.createElement("webview");
+          view.setAttribute("partition", "persist:otter-web");
+          view.setAttribute("allowpopups", "true");
+          view.addEventListener("page-title-updated", (event) => {
+            tab.title = event.title || tab.title;
+            paintBrowserTabs();
+          });
+          view.addEventListener("did-navigate", (event) => {
+            if (event.url) tab.url = event.url;
+            if (browserTabs[browserActive] === tab) browserWindow.querySelector(".browser-bar input").value = tab.url;
+          });
+          view.addEventListener("did-navigate-in-page", (event) => {
+            if (event.url) tab.url = event.url;
+            if (browserTabs[browserActive] === tab) browserWindow.querySelector(".browser-bar input").value = tab.url;
+          });
+        } else {
+          view = document.createElement("iframe");
+        }
+        view.src = tab.url;
+        tab.view = view;
+        stage.appendChild(view);
+      } else if (tab.view.getAttribute("src") !== tab.url && tab.view.src !== tab.url) {
+        tab.view.src = tab.url;
+      }
+    }
+    function paintBrowserTabs() {
+      if (!browserWindow) return;
+      const host = browserWindow.querySelector(".browser-tabs");
+      host.replaceChildren();
+      browserTabs.forEach((tab, index) => {
+        const row = document.createElement("div");
+        row.className = "browser-tab" + (index === browserActive ? " active" : "");
+        const label = document.createElement("button");
+        label.type = "button";
+        label.className = "browser-tab-label";
+        label.textContent = browserTitle(tab);
+        label.addEventListener("click", () => showBrowserTab(index));
+        const close = document.createElement("button");
+        close.type = "button";
+        close.className = "tab-x";
+        close.setAttribute("aria-label", "Close tab");
+        close.textContent = "\u00d7";
+        close.addEventListener("click", () => closeBrowserTab(index));
+        row.append(label, close);
+        host.appendChild(row);
+        if (tab.view) tab.view.hidden = index !== browserActive;
+      });
+    }
+    function showBrowserTab(index) {
+      if (!browserTabs.length) return;
+      browserActive = Math.max(0, Math.min(index, browserTabs.length - 1));
+      const tab = browserTabs[browserActive];
+      loadBrowserView(tab);
+      browserWindow.querySelector(".browser-bar input").value = tab.url || "";
+      paintBrowserTabs();
+    }
+    function addBrowserTab(url) {
+      ensureBrowser();
+      const href = normalizeUrl(url) || "https://www.google.com";
+      browserTabs.push({ url: href, title: "", view: null });
+      showBrowserTab(browserTabs.length - 1);
+    }
+    function closeBrowserTab(index) {
+      const tab = browserTabs[index];
+      if (tab && tab.view) tab.view.remove();
+      browserTabs.splice(index, 1);
+      if (!browserTabs.length) {
+        addBrowserTab("https://www.google.com");
+        return;
+      }
+      showBrowserTab(Math.min(index, browserTabs.length - 1));
+    }
+    function browserNav(kind) {
+      const tab = browserTabs[browserActive];
+      const view = tab && tab.view;
+      if (!view) return;
+      if (kind === "back" && view.goBack) view.goBack();
+      else if (kind === "forward" && view.goForward) view.goForward();
+      else if (kind === "reload" && view.reload) view.reload();
+    }
+    function openBrowser(url) {
+      ensureBrowser();
+      if (url) addBrowserTab(url);
+      else if (!browserTabs.length) addBrowserTab("https://www.google.com");
+      else showBrowserTab(browserActive);
+      openWindow(browserWindow);
+      return true;
+    }
+
+    function launchApp(data, name) {
+      const id = (data && data.otterApp) || appId(name);
+      if (data && data.otterApp === "browser") { openBrowser(); return; }
+      if (data && data.url) { openWebApp((data && data.title) || name, data.url); return; }
+      if (id === "command") { openWindow(document.getElementById("command-window")); document.getElementById("command-input").focus(); return; }
+      if (id === "settings") { openWindow(document.getElementById("settings-window")); return; }
+      if (id === "store") { openStore(); return; }
+      const note = document.getElementById("store-note");
+      if (note) note.textContent = String(name || "That app").replace(/\.app$/i, "") + " is not a website app.";
+    }
+    function openAppFile(rel, name) {
+      const parts = rel.split("/");
+      const file = parts.pop();
+      fetch(mediaUrl(parts.join("/"), file)).then((response) => {
+        if (!response.ok) throw new Error("missing");
+        return response.json();
+      }).then((data) => launchApp(data, name)).catch(() => launchApp({}, name));
+    }
+
+    function pathText(rel) { return rel ? "OtterOS files/" + rel : "OtterOS files"; }
+    function renderFiles(data) {
+      filesRel = data.path || "";
+      document.getElementById("files-path").value = pathText(filesRel);
+      document.getElementById("files-back").disabled = data.parent === null;
+      const body = document.getElementById("files-body");
+      body.replaceChildren();
+      (data.entries || []).forEach((entry) => {
+        const row = document.createElement("button");
+        row.type = "button";
+        row.className = "file-row";
+        row.innerHTML = '<span class="glyph"></span><span class="file-label"></span>';
+        const glyph = row.querySelector(".glyph");
+        glyph.innerHTML = glyphFor(entry.name, entry.kind);
+        row.querySelector(".file-label").textContent = entry.name;
+        if (isImage(entry.name)) paintThumb(glyph, filesRel ? filesRel + "/" + entry.name : entry.name);
+        if (/\.(app|shortcut)$/i.test(entry.name)) {
+          const rel = filesRel ? filesRel + "/" + entry.name : entry.name;
+          resolveSite(rel).then((url) => { if (url && row.isConnected) paintSiteIcon(glyph, url); });
+        }
+        const rel = filesRel ? filesRel + "/" + entry.name : entry.name;
+        row.dataset.rel = rel;
+        row.dataset.name = entry.name;
+        row.dataset.kind = entry.kind || "file";
+        row.addEventListener("click", () => {
+          body.querySelectorAll(".file-row.selected").forEach((item) => item.classList.remove("selected"));
+          row.classList.add("selected");
+          showFilePreview(rel, entry.name);
+        });
+        row.addEventListener("dblclick", () => openEntry(rel, entry.name, entry.kind));
+        body.appendChild(row);
+      });
+      showFilePreview("", "");
+      if (!(data.entries || []).length) {
+        const empty = document.createElement("p");
+        empty.className = "files-empty";
+        empty.textContent = "Nothing here yet. Use New, or right-click, to add something.";
+        body.appendChild(empty);
+      }
+    }
+    function loadFiles(rel) { return listFolder(rel).then(renderFiles).catch(() => {}); }
+    function openFiles(rel) { openWindow(document.getElementById("files-window")); return loadFiles(rel || ""); }
+    function openEntry(rel, name, kind) {
+      if (kind === "folder" || (!kind && !name.includes("."))) { openFiles(rel); return; }
+      if (appId(name)) { openAppFile(rel, name); return; }
+      if (isText(name)) { openText(rel, name); return; }
+      if (isImage(name) || isAudio(name) || isVideo(name)) { openMedia(rel, name); return; }
+      if (String(name).toLowerCase().endsWith(".shortcut")) { openShortcut(rel); }
+    }
+    function openText(rel, name) {
+      editorPath = rel;
+      document.getElementById("editor-name").textContent = name;
+      fetch("/api/text?path=" + encodeURIComponent(rel)).then((response) => response.ok ? response.text() : "").then((text) => {
+        document.getElementById("editor-text").value = text;
+        openWindow(document.getElementById("editor-window"));
+      });
+    }
+    function paintThumb(glyph, rel) {
+      const img = document.createElement("img");
+      img.className = "file-thumb";
+      img.alt = "";
+      img.draggable = false;
+      img.src = mediaUrl("", rel);
+      glyph.replaceChildren(img);
+    }
+    function showFilePreview(rel, name) {
+      const pane = document.getElementById("files-preview");
+      const img = document.getElementById("files-preview-img");
+      const label = document.getElementById("files-preview-name");
+      if (!pane || !img) return;
+      if (!rel || !isImage(name)) {
+        pane.hidden = true;
+        img.removeAttribute("src");
+        if (label) label.textContent = "";
+        return;
+      }
+      img.alt = name;
+      img.src = mediaUrl("", rel);
+      if (label) label.textContent = name;
+      pane.hidden = false;
+    }
+    function openMedia(rel, name) {
+      document.getElementById("media-name").textContent = name;
+      const stage = document.getElementById("media-stage");
+      stage.replaceChildren();
+      const parts = rel.split("/");
+      const file = parts.pop();
+      const src = mediaUrl(parts.join("/"), file);
+      let view;
+      if (isAudio(name)) view = document.createElement("audio");
+      else if (isVideo(name)) view = document.createElement("video");
+      else view = document.createElement("img");
+      view.src = src;
+      if (view.tagName === "IMG") view.alt = name;
+      else { view.controls = true; view.autoplay = true; }
+      stage.appendChild(view);
+      openWindow(document.getElementById("media-window"));
+    }
+    function openShortcut(rel) {
+      const parts = rel.split("/");
+      const file = parts.pop();
+      fetch(mediaUrl(parts.join("/"), file)).then((response) => response.json()).then((data) => {
+        if (!data) return;
+        if (data.browser) { openBrowser(data.url || ""); return; }
+        if (data.url && !data.target) { openWebApp(data.title || "Web", data.url); return; }
+        if (data.target) openByPath(data.target);
+      }).catch(() => {});
+    }
+    function openByPath(rel) {
+      const target = String(rel || "").replace(/^OtterOS files\/?/i, "");
+      const parts = target.split("/").filter(Boolean);
+      const name = parts.pop();
+      const parent = parts.join("/");
+      if (!name) { openFiles(""); return; }
+      listFolder(parent).then((data) => {
+        const entry = (data.entries || []).find((item) => item.name.toLowerCase() === name.toLowerCase());
+        if (!entry) return;
+        openEntry(parent ? parent + "/" + entry.name : entry.name, entry.name, entry.kind);
+      }).catch(() => {});
+    }
+
+    let desktopStamp = "";
+    function readIconLayout() {
+      try { return JSON.parse(localStorage.getItem("otteros-icon-layout") || "{}"); } catch (error) { return {}; }
+    }
+    function saveIconSpot(name, left, top) {
+      const layout = readIconLayout();
+      layout[name] = { left: Math.round(left), top: Math.round(top) };
+      localStorage.setItem("otteros-icon-layout", JSON.stringify(layout));
+      scheduleState();
+    }
+    function clampIcon(left, top) {
+      const parent = document.getElementById("desktop");
+      const width = parent.clientWidth || window.innerWidth;
+      const height = parent.clientHeight || window.innerHeight;
+      const boxW = settings.grid ? 74 : 100;
+      const boxH = settings.grid ? 78 : 120;
+      return {
+        left: Math.min(Math.max(8, width - boxW), Math.max(8, left)),
+        top: Math.min(Math.max(8, height - boxH), Math.max(8, top))
+      };
+    }
+    function snapToGrid(left, top) {
+      const col = Math.max(0, Math.round((left - 10) / 76));
+      const row = Math.max(0, Math.round((top - 10) / 80));
+      return clampIcon(10 + col * 76, 10 + row * 80);
+    }
+    function compactGrid() {
+      const columns = new Map();
+      document.querySelectorAll(".desk-icon").forEach((button) => {
+        const spot = snapToGrid(parseFloat(button.style.left) || 10, parseFloat(button.style.top) || 10);
+        const key = String(spot.left);
+        if (!columns.has(key)) columns.set(key, []);
+        columns.get(key).push({ button, top: spot.top, left: spot.left });
+      });
+      columns.forEach((items) => {
+        items.sort((a, b) => a.top - b.top);
+        let row = Math.max(0, Math.round((items[0].top - 10) / 80));
+        items.forEach((item) => {
+          const spot = clampIcon(item.left, 10 + row * 80);
+          item.button.style.left = spot.left + "px";
+          item.button.style.top = spot.top + "px";
+          if (item.button.dataset.name) saveIconSpot(item.button.dataset.name, spot.left, spot.top);
+          row += 1;
+        });
+      });
+    }
+    function placeIcon(left, top) {
+      return settings.grid ? snapToGrid(left, top) : clampIcon(left, top);
+    }
+    function snapDesktopIcons() {
+      document.querySelectorAll(".desk-icon").forEach((button) => {
+        const spot = snapToGrid(parseFloat(button.style.left) || 8, parseFloat(button.style.top) || 8);
+        button.style.left = spot.left + "px";
+        button.style.top = spot.top + "px";
+        if (button.dataset.name) saveIconSpot(button.dataset.name, spot.left, spot.top);
+      });
+    }
+    function selectIcon(button) {
+      document.querySelectorAll(".desk-icon.selected").forEach((el) => el.classList.remove("selected"));
+      if (button) button.classList.add("selected");
+    }
+    function bindIconDrag(button, open) {
+      button.addEventListener("pointerdown", (event) => {
+        if (event.button !== 0) return;
+        const rect = button.getBoundingClientRect();
+        const drag = {
+          pointer: event.pointerId,
+          dx: event.clientX - rect.left,
+          dy: event.clientY - rect.top,
+          startX: event.clientX,
+          startY: event.clientY,
+          moved: false
+        };
+        function move(ev) {
+          if (ev.pointerId !== drag.pointer) return;
+          if (!drag.moved && Math.hypot(ev.clientX - drag.startX, ev.clientY - drag.startY) < 6) return;
+          drag.moved = true;
+          button.classList.add("dragging");
+          const parent = document.getElementById("desktop").getBoundingClientRect();
+          const spot = placeIcon(ev.clientX - drag.dx - parent.left, ev.clientY - drag.dy - parent.top);
+          button.style.left = spot.left + "px";
+          button.style.top = spot.top + "px";
+        }
+        function up(ev) {
+          if (ev.pointerId !== drag.pointer) return;
+          document.removeEventListener("pointermove", move);
+          document.removeEventListener("pointerup", up);
+          button.classList.remove("dragging");
+          if (!drag.moved) {
+            selectIcon(button);
+            return;
+          }
+          button._draggedAt = Date.now();
+          saveIconSpot(button.dataset.name, parseFloat(button.style.left), parseFloat(button.style.top));
+        }
+        document.addEventListener("pointermove", move);
+        document.addEventListener("pointerup", up);
+      });
+      button.addEventListener("dblclick", (event) => {
+        if (button._draggedAt && Date.now() - button._draggedAt < 400) {
+          event.preventDefault();
+          event.stopPropagation();
+          return;
+        }
+        open();
+      });
+    }
+    function refreshDesktop() {
+      return listFolder("desktop").then((data) => {
+        const host = document.getElementById("desktop-icons");
+        const items = (data.entries || []).concat([{ name: "Bin", kind: "folder", special: "bin" }]);
+        const stamp = items.map((entry) => entry.name).join("\n");
+        if (stamp === desktopStamp && host.childElementCount === items.length) return;
+        desktopStamp = stamp;
+        host.replaceChildren();
+        items.forEach((entry, index) => {
+          const button = document.createElement("button");
+          button.type = "button";
+          button.className = "desk-icon";
+          const saved = readIconLayout()[entry.name];
+          const fallbackTop = settings.grid ? 10 + index * 80 : 18 + index * 108;
+          const spot = placeIcon(saved && Number.isFinite(saved.left) ? saved.left : 10, saved && Number.isFinite(saved.top) ? saved.top : fallbackTop);
+          button.style.left = spot.left + "px";
+          button.style.top = spot.top + "px";
+          button.innerHTML = '<span class="glyph"></span><span></span>';
+          const glyph = button.querySelector(".glyph");
+          glyph.innerHTML = entry.special === "bin" ? binSvg : glyphFor(entry.name, entry.kind);
+          if (!entry.special && isImage(entry.name)) paintThumb(glyph, "desktop/" + entry.name);
+          button.querySelector("span:last-child").textContent = String(entry.name).replace(/\.shortcut$/i, "");
+          const rel = entry.special === "bin" ? "Bin" : "desktop/" + entry.name;
+          button.dataset.name = entry.name;
+          button.dataset.rel = rel;
+          button.dataset.kind = entry.special === "bin" ? "folder" : (entry.kind || "file");
+          if (entry.special) button.dataset.special = entry.special;
+          bindIconDrag(button, () => openEntry(rel, entry.name, entry.special === "bin" ? "folder" : entry.kind));
+          host.appendChild(button);
+          if (!entry.special && /\.(app|shortcut)$/i.test(entry.name)) {
+            if (entry.name.toLowerCase().includes("internet explorer")) {
+              glyph.innerHTML = ieSvg;
+            } else {
+              const lookup = entry.name.toLowerCase().endsWith(".shortcut") ? siteForShortcut(entry.name) : resolveSite(rel);
+              lookup.then((url) => { if (url && button.isConnected) paintSiteIcon(glyph, url); });
+            }
+          }
+        });
+        if (settings.grid) compactGrid();
+      }).catch(() => {});
+    }
+    function refreshWallpaper() {
+      fetch("/api/wallpaper").then((response) => response.json()).then((data) => {
+        document.getElementById("desktop").style.backgroundImage = data.url ? "url('" + data.url + "')" : "";
+      }).catch(() => {});
+    }
+
+    const storeCatalog = [
+      { name: "Cool Stuff", url: "https://lizfam.github.io/cool_stuff/", blurb: "Rain World, programming, Hollow Knight, and alpacas.", tone: "#1a1a1a" }
+    ];
+    const browseExtra = [
+      { name: "Internet Explorer", app: "browser", blurb: "A browser with more than one tab.", tone: "#0b3d91" },
+      { name: "YouTube", url: "https://www.youtube.com", blurb: "Videos, music, and live streams.", tone: "#3d000c" },
+      { name: "Wikipedia", url: "https://www.wikipedia.org", blurb: "A free encyclopedia.", tone: "#222" },
+      { name: "Spotify", url: "https://open.spotify.com", blurb: "Music and podcasts.", tone: "#063d1e" },
+      { name: "Reddit", url: "https://www.reddit.com", blurb: "Posts and communities.", tone: "#3d1200" },
+      { name: "GitHub", url: "https://github.com", blurb: "Code, issues, and projects.", tone: "#161b22" },
+      { name: "Twitch", url: "https://www.twitch.tv", blurb: "Live streams.", tone: "#1a0f33" },
+      { name: "Google", url: "https://www.google.com", blurb: "Search the web.", tone: "#10243f" },
+      { name: "Discord", url: "https://discord.com/app", blurb: "Chat, voice, and communities.", tone: "#1c1f4a" },
+      { name: "Gmail", url: "https://mail.google.com", blurb: "Email from Google.", tone: "#3b1d14" },
+      { name: "Google Maps", url: "https://maps.google.com", blurb: "Maps and directions.", tone: "#14301f" },
+      { name: "Google Drive", url: "https://drive.google.com", blurb: "Files in the cloud.", tone: "#10243f" },
+      { name: "Google Docs", url: "https://docs.google.com", blurb: "Documents you can share.", tone: "#10243f" },
+      { name: "Calendar", url: "https://calendar.google.com", blurb: "Days, weeks, and reminders.", tone: "#10243f" },
+      { name: "Translate", url: "https://translate.google.com", blurb: "Translate words and pages.", tone: "#10243f" },
+      { name: "Gemini", url: "https://gemini.google.com", blurb: "Chat with Google's AI.", tone: "#10243f" },
+      { name: "ChatGPT", url: "https://chatgpt.com", blurb: "Chat and write with AI.", tone: "#1a2330" },
+      { name: "Netflix", url: "https://www.netflix.com", blurb: "Movies and series.", tone: "#3d000c" },
+      { name: "Disney+", url: "https://www.disneyplus.com", blurb: "Disney, Marvel, and Star Wars.", tone: "#041428" },
+      { name: "Prime Video", url: "https://www.primevideo.com", blurb: "Movies and TV from Amazon.", tone: "#0b1c33" },
+      { name: "Crunchyroll", url: "https://www.crunchyroll.com", blurb: "Anime and manga.", tone: "#2a1408" },
+      { name: "Instagram", url: "https://www.instagram.com", blurb: "Photos, reels, and stories.", tone: "#2a1020" },
+      { name: "TikTok", url: "https://www.tiktok.com", blurb: "Short videos.", tone: "#111" },
+      { name: "X", url: "https://x.com", blurb: "Posts and conversations.", tone: "#111" },
+      { name: "Facebook", url: "https://www.facebook.com", blurb: "Friends, groups, and pages.", tone: "#0c1e3d" },
+      { name: "Pinterest", url: "https://www.pinterest.com", blurb: "Ideas, images, and boards.", tone: "#3d1014" },
+      { name: "WhatsApp", url: "https://web.whatsapp.com", blurb: "Messages in the browser.", tone: "#063d1e" },
+      { name: "Telegram", url: "https://web.telegram.org", blurb: "Chats and channels.", tone: "#0c2740" },
+      { name: "Slack", url: "https://app.slack.com", blurb: "Team chat.", tone: "#1c1233" },
+      { name: "Outlook", url: "https://outlook.live.com", blurb: "Mail and calendar.", tone: "#0c2740" },
+      { name: "Notion", url: "https://www.notion.so", blurb: "Notes, docs, and wikis.", tone: "#161616" },
+      { name: "Figma", url: "https://www.figma.com", blurb: "Design and prototypes.", tone: "#1a1020" },
+      { name: "Canva", url: "https://www.canva.com", blurb: "Posters, slides, and videos.", tone: "#10243f" },
+      { name: "Stack Overflow", url: "https://stackoverflow.com", blurb: "Questions and answers about code.", tone: "#2a1c08" },
+      { name: "DuckDuckGo", url: "https://duckduckgo.com", blurb: "Private search.", tone: "#3d2208" },
+      { name: "Amazon", url: "https://www.amazon.com", blurb: "Shopping.", tone: "#1c1408" },
+      { name: "eBay", url: "https://www.ebay.com", blurb: "Buy and sell.", tone: "#1c1408" },
+      { name: "Steam", url: "https://store.steampowered.com", blurb: "PC games and the store.", tone: "#0c1a28" },
+      { name: "Roblox", url: "https://www.roblox.com", blurb: "Games made by players.", tone: "#1a1a1a" },
+      { name: "Chess.com", url: "https://www.chess.com", blurb: "Play chess.", tone: "#1c2410" },
+      { name: "Duolingo", url: "https://www.duolingo.com", blurb: "Language practice.", tone: "#14301f" },
+      { name: "SoundCloud", url: "https://soundcloud.com", blurb: "Songs and mixes.", tone: "#3d2208" },
+      { name: "IMDb", url: "https://www.imdb.com", blurb: "Movies, casts, and ratings.", tone: "#1c1408" },
+      { name: "BBC", url: "https://www.bbc.com", blurb: "News and stories.", tone: "#1a1010" },
+      { name: "Weather", url: "https://weather.com", blurb: "Forecasts.", tone: "#0c2740" },
+      { name: "Internet Archive", url: "https://archive.org", blurb: "Old websites, books, and video.", tone: "#1a1a1a" }
+    ];
+    let libraryApps = [];
+    let storeTab = "featured";
+    function sameSite(a, b) {
+      try {
+        const left = new URL(normalizeUrl(a)).hostname.replace(/^www\./, "");
+        const right = new URL(normalizeUrl(b)).hostname.replace(/^www\./, "");
+        return left === right;
+      } catch (error) { return false; }
+    }
+    function ownedCopy(app) {
+      if (app && app.app === "browser") return libraryApps.find((row) => row.body && row.body.otterApp === "browser");
+      return libraryApps.find((row) => row.body && sameSite(row.body.url, app.url));
+    }
+    function paintCatalogIcon(node, app) {
+      if (app && app.app === "browser") { node.innerHTML = ieSvg; return; }
+      paintSiteIcon(node, app && app.url);
+    }
+    function installBrowser() {
+      const file = "Internet Explorer.app";
+      return listFolder("Apps").then((data) => {
+        const names = (data.entries || []).map((entry) => entry.name.toLowerCase());
+        if (names.includes(file.toLowerCase())) return "Internet Explorer is already in Apps.";
+        const body = JSON.stringify({ otterApp: "browser", title: "Internet Explorer" }, null, 2);
+        return fetch("/api/upload?path=Apps&name=" + encodeURIComponent(file), {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body
+        }).then((response) => {
+          if (!response.ok) throw new Error("upload");
+          return response.json();
+        }).then((saved) => {
+          const appName = saved.name || file;
+          const shortcut = JSON.stringify({ otterShortcut: true, target: "Apps/" + appName, browser: true });
+          return fetch("/api/upload?path=desktop&name=" + encodeURIComponent("Internet Explorer.shortcut"), {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: shortcut
+          }).then(() => refreshStore().then(() => refreshDesktop()).then(() => "Added Internet Explorer. A shortcut is on the desktop."));
+        });
+      }).catch(() => "Couldn't add that app.");
+    }
+    function showStoreTab(tab) {
+      storeTab = tab;
+      ["featured", "browse", "library"].forEach((name) => {
+        const panel = document.getElementById("store-" + name);
+        const button = document.getElementById("tab-" + name);
+        if (panel) {
+          panel.hidden = name !== tab;
+          if (name === tab) {
+            panel.classList.remove("fade-up");
+            void panel.offsetWidth;
+            panel.classList.add("fade-up");
+          }
+        }
+        if (button) button.setAttribute("aria-selected", name === tab ? "true" : "false");
+      });
+    }
+    function storeAction(app) {
+      const owned = ownedCopy(app);
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "store-get";
+      if (owned) {
+        button.textContent = "In Library";
+        button.addEventListener("click", () => {
+          if (app.app === "browser") openBrowser();
+          else openWebApp(owned.body.title || app.name, owned.body.url);
+        });
+      } else {
+        button.textContent = "Get";
+        button.addEventListener("click", () => {
+          button.disabled = true;
+          const job = app.app === "browser" ? installBrowser() : addWebApp(app.name, app.url);
+          job.then((message) => {
+            document.getElementById("store-note").textContent = message;
+            button.disabled = false;
+            if (app.app === "browser" && String(message).startsWith("Added ")) openBrowser();
+          });
+        });
+      }
+      return button;
+    }
+    function storeCards(apps) {
+      const grid = document.createElement("div");
+      grid.className = "store-cards";
+      apps.forEach((app) => {
+        const card = document.createElement("article");
+        card.className = "store-card";
+        const art = document.createElement("div");
+        art.className = "store-card-art";
+        art.style.background = "";
+        const logo = document.createElement("span");
+        logo.className = "glyph";
+        paintCatalogIcon(logo, app);
+        art.appendChild(logo);
+        const body = document.createElement("div");
+        body.className = "store-card-body";
+        const strong = document.createElement("strong");
+        strong.textContent = app.name;
+        const span = document.createElement("span");
+        span.textContent = app.blurb || app.url;
+        body.append(strong, span, storeAction(app));
+        card.append(art, body);
+        grid.appendChild(card);
+      });
+      return grid;
+    }
+    function renderFeatured() {
+      const host = document.getElementById("store-featured");
+      if (!host) return;
+      host.replaceChildren();
+      const heroApp = storeCatalog[0];
+      const banner = document.createElement("div");
+      banner.className = "store-hero";
+      banner.style.background = "";
+      const copy = document.createElement("div");
+      const kicker = document.createElement("p");
+      kicker.className = "store-kicker";
+      kicker.textContent = "Featured";
+      const title = document.createElement("h3");
+      title.textContent = heroApp.name;
+      const blurb = document.createElement("p");
+      blurb.textContent = heroApp.blurb;
+      copy.append(kicker, title, blurb, storeAction(heroApp));
+      const logo = document.createElement("span");
+      logo.className = "glyph store-hero-logo";
+      paintCatalogIcon(logo, heroApp);
+      banner.append(copy, logo);
+      const heading = document.createElement("h3");
+      heading.className = "store-section-title";
+      heading.textContent = "Featured";
+      host.append(banner, storeCards(storeCatalog));
+    }
+    function renderBrowse() {
+      const grid = document.getElementById("store-browse-grid");
+      if (!grid) return;
+      const query = (document.getElementById("store-search").value || "").trim().toLowerCase();
+      const apps = storeCatalog.concat(browseExtra).filter((app) => !query || (app.name + " " + app.blurb + " " + (app.url || "")).toLowerCase().includes(query));
+      grid.replaceChildren();
+      if (!apps.length) {
+        const empty = document.createElement("p");
+        empty.className = "hint";
+        empty.textContent = "No matches.";
+        grid.appendChild(empty);
+        return;
+      }
+      grid.appendChild(storeCards(apps));
+    }
+    function removeLibraryApp(appFile) {
+      return fetch("/api/delete?path=" + encodeURIComponent("Apps/" + appFile), { method: "POST" }).then(() => {
+        return listFolder("desktop").then((data) => {
+          const files = (data.entries || []).filter((item) => item.name.toLowerCase().endsWith(".shortcut"));
+          return Promise.all(files.map((item) => fetch(mediaUrl("desktop", item.name)).then((response) => response.ok ? response.json() : null).then((body) => {
+            const target = String((body && body.target) || "").replace(/\\/g, "/").toLowerCase();
+            if (target === "apps/" + appFile.toLowerCase()) {
+              return fetch("/api/delete?path=" + encodeURIComponent("desktop/" + item.name), { method: "POST" });
+            }
+          }).catch(() => {})));
+        });
+      }).then(() => { refreshStore(); refreshDesktop(); });
+    }
+    function renderLibrary() {
+      const list = document.getElementById("store-list");
+      if (!list) return;
+      list.replaceChildren();
+      if (!libraryApps.length) {
+        const empty = document.createElement("p");
+        empty.className = "hint";
+        empty.textContent = "Nothing in your library yet. Get an app from Featured or Browse.";
+        list.appendChild(empty);
+        return;
+      }
+      const grid = document.createElement("div");
+      grid.className = "store-cards";
+      libraryApps.forEach((row) => {
+        const title = row.body.title || row.item.name.replace(/\.app$/i, "");
+        const card = document.createElement("article");
+        card.className = "store-card";
+        const art = document.createElement("div");
+        art.className = "store-card-art";
+        art.style.background = "";
+        const logo = document.createElement("span");
+        logo.className = "glyph";
+        if (row.body.otterApp === "browser") logo.innerHTML = ieSvg;
+        else paintSiteIcon(logo, row.body.url);
+        art.appendChild(logo);
+        const body = document.createElement("div");
+        body.className = "store-card-body";
+        const strong = document.createElement("strong");
+        strong.textContent = title;
+        const span = document.createElement("span");
+        span.textContent = row.body.otterApp === "browser" ? "Tabs" : row.body.url;
+        const actions = document.createElement("div");
+        actions.className = "store-card-actions";
+        const openBtn = document.createElement("button");
+        openBtn.type = "button";
+        openBtn.className = "store-get";
+        openBtn.textContent = "Open";
+        openBtn.addEventListener("click", () => {
+          if (row.body.otterApp === "browser") openBrowser();
+          else openWebApp(title, row.body.url);
+        });
+        const remove = document.createElement("button");
+        remove.type = "button";
+        remove.className = "store-remove";
+        remove.textContent = "Remove";
+        remove.addEventListener("click", () => removeLibraryApp(row.item.name));
+        actions.append(openBtn, remove);
+        body.append(strong, span, actions);
+        card.append(art, body);
+        grid.appendChild(card);
+      });
+      list.appendChild(grid);
+    }
+
+    function refreshStore() {
+      return listFolder("Apps").then((data) => {
+        const apps = (data.entries || []).filter((item) => item.name.toLowerCase().endsWith(".app"));
+        return Promise.all(apps.map((item) => fetch(mediaUrl("Apps", item.name)).then((response) => response.ok ? response.json() : null).then((body) => ({ item, body })).catch(() => ({ item, body: null }))));
+      }).then((rows) => {
+        libraryApps = (rows || []).filter((row) => row.body && ((row.body.otterApp === "web" && row.body.url) || row.body.otterApp === "browser"));
+        renderLibrary();
+        renderFeatured();
+        renderBrowse();
+      }).catch(() => {});
+    }
+
+    function addWebApp(name, url) {
+      const href = normalizeUrl(url);
+      const file = safeAppFile(name);
+      if (!file || !href) return Promise.resolve("Use a name and a web address.");
+      return listFolder("Apps").then((data) => {
+        const names = (data.entries || []).map((entry) => entry.name.toLowerCase());
+        if (names.includes(file.toLowerCase())) return file.replace(/\.app$/i, "") + " is already in Apps.";
+        const body = JSON.stringify({ otterApp: "web", title: file.replace(/\.app$/i, ""), url: href }, null, 2);
+        return fetch("/api/upload?path=Apps&name=" + encodeURIComponent(file), {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body
+        }).then((response) => {
+          if (!response.ok) throw new Error("upload");
+          return response.json();
+        }).then((saved) => {
+          const appName = saved.name || file;
+          const title = String(appName).replace(/\.app$/i, "");
+          const shortcut = JSON.stringify({ otterShortcut: true, target: "Apps/" + appName, url: href });
+          return fetch("/api/upload?path=desktop&name=" + encodeURIComponent(title + ".shortcut"), {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: shortcut
+          }).then((response) => response.json()).then((savedShortcut) => {
+            shortcutSites.set((savedShortcut && savedShortcut.name) || (title + ".shortcut"), href);
+            return refreshStore().then(() => refreshDesktop()).then(() => "Added " + title + ". A shortcut is on the desktop.");
+          });
+        });
+      }).catch(() => "Couldn't add that app.");
+    }
+
+    function openStore() {
+      openWindow(document.getElementById("store-window"));
+      refreshStore();
+    }
+    document.getElementById("store-form").addEventListener("submit", (event) => {
+      event.preventDefault();
+      const nameInput = document.getElementById("store-name");
+      const urlInput = document.getElementById("store-url");
+      addWebApp(nameInput.value, urlInput.value).then((message) => {
+        document.getElementById("store-note").textContent = message;
+        if (String(message).startsWith("Added ")) {
+          const href = normalizeUrl(urlInput.value);
+          const label = nameInput.value.trim();
+          nameInput.value = "";
+          urlInput.value = "";
+          if (href) openWebApp(label, href);
+        }
+      });
+    });
+    document.getElementById("store-search").addEventListener("input", () => renderBrowse());
+    document.getElementById("tab-featured").addEventListener("click", () => showStoreTab("featured"));
+    document.getElementById("tab-browse").addEventListener("click", () => showStoreTab("browse"));
+    document.getElementById("tab-library").addEventListener("click", () => showStoreTab("library"));
+
+    function shellPrompt() { return (shellCwd ? "OtterOS files/" + shellCwd : "OtterOS files") + ">"; }
+    function printCommand(text) {
+      const log = document.getElementById("command-log");
+      log.textContent += (log.textContent ? "\n" : "") + text;
+      log.scrollTop = log.scrollHeight;
+    }
+    function runCommand(typed) {
+      const text = typed.trim();
+      if (!text.startsWith("#")) return Promise.resolve("Commands start with #. Type #help");
+      const body = text.slice(1).trim();
+      const splitAt = body.indexOf(" ");
+      const name = (splitAt === -1 ? body : body.slice(0, splitAt)).toLowerCase();
+      const arg = splitAt === -1 ? "" : body.slice(splitAt + 1).trim();
+      if (name === "help") return Promise.resolve("Apps\n#store  #add Name https://example.com  #web https://example.com  #apps  #launch Name\n#google otters\nFiles\n#ls  #cd  #pwd  #open  #read  #write  #mkdir  #delete\nSystem\n#lock  #settings  #files  #clear  #theme light  #restart  #stop");
+      if (name === "clear") { document.getElementById("command-log").textContent = "OtterOS terminal\nType #help."; return Promise.resolve(""); }
+      if (name === "pwd") return Promise.resolve(pathText(shellCwd));
+      if (name === "ls") return listFolder(shellCwd).then((data) => (data.entries || []).map((entry) => (entry.kind === "folder" ? entry.name + "/" : entry.name)).join("\n") || "(empty)").catch(() => "Can't find that folder.");
+      if (name === "cd") {
+        const rel = !arg || arg === "/" ? "" : arg === ".." ? shellCwd.split("/").slice(0, -1).join("/") : (shellCwd ? shellCwd + "/" : "") + arg;
+        return listFolder(rel).then((data) => { shellCwd = data.path || ""; document.getElementById("command-prompt").textContent = shellPrompt(); return pathText(shellCwd); }).catch(() => "Can't find that folder.");
+      }
+      if (name === "files") { openFiles(arg || ""); return Promise.resolve("Opened " + pathText(arg || "")); }
+      if (name === "settings") { openWindow(document.getElementById("settings-window")); return Promise.resolve("Settings"); }
+      if (name === "store") { openStore(); return Promise.resolve("App Store"); }
+      if (name === "lock") return Promise.resolve("OtterOS is open.");
+      if (name === "apps") return listFolder("Apps").then((data) => (data.entries || []).map((entry) => entry.name).join("\n") || "(empty)");
+      if (name === "add") {
+        const match = arg.match(/^(.*)\s+(\S+)$/);
+        if (!match) return Promise.resolve("Use #add YouTube https://youtube.com");
+        return addWebApp(match[1], match[2]).then((message) => {
+          if (String(message).startsWith("Added ")) openWebApp(match[1].trim(), match[2]);
+          return message;
+        });
+      }
+      if (name === "web") {
+        const href = normalizeUrl(arg);
+        if (!href) return Promise.resolve("Use #web https://example.com");
+        openBrowser(href);
+        return Promise.resolve("Opened " + href);
+      }
+      if (name === "google") {
+        const href = arg ? "https://www.google.com/search?q=" + encodeURIComponent(arg) : "https://www.google.com";
+        openWebApp("Google", href);
+        return Promise.resolve(arg ? "Searching " + arg : "Google");
+      }
+      if (name === "launch") {
+        if (!arg) return Promise.resolve("Use #launch and an app name");
+        return listFolder("Apps").then((data) => {
+          const want = arg.toLowerCase().replace(/\.app$/, "");
+          const entry = (data.entries || []).find((item) => item.name.toLowerCase().replace(/\.app$/, "") === want);
+          if (!entry) return "No app called " + arg;
+          openAppFile("Apps/" + entry.name, entry.name);
+          return "Opened " + entry.name.replace(/\.app$/i, "");
+        });
+      }
+      if (name === "open") { if (!arg) return Promise.resolve("Use #open Apps/Name.app"); openByPath(arg); return Promise.resolve("Opened " + arg); }
+      if (name === "read") return fetch("/api/text?path=" + encodeURIComponent(arg)).then((response) => response.ok ? response.text() : "Can't read that.");
+      if (name === "mkdir") {
+        return fetch("/api/create?path=" + encodeURIComponent(shellCwd) + "&kind=folder", { method: "POST" }).then((response) => response.ok ? "Made a folder" : "Couldn't make that folder.");
+      }
+      if (name === "delete") return fetch("/api/delete?path=" + encodeURIComponent(arg), { method: "POST" }).then((response) => response.ok ? "Moved to the Bin" : "Can't delete that.");
+      if (name === "theme") {
+        if (arg !== "light" && arg !== "dark") return Promise.resolve("Use #theme light or #theme dark");
+        settings.light = arg === "light";
+        applySettings(); saveSettings();
+        return Promise.resolve(arg === "light" ? "Light mode" : "Dark mode");
+      }
+      if (name === "calc") {
+        if (!/^[\d+\-*/().\s]+$/.test(arg)) return Promise.resolve("Use #calc 2*(4+1)");
+        try { return Promise.resolve(String(Function("return (" + arg + ")")())); } catch (error) { return Promise.resolve("Can't work that out"); }
+      }
+      if (name === "restart") { writeState(); location.reload(); return Promise.resolve("Restarting"); }
+      if (name === "stop") {
+        writeState();
+        fetch("/api/shutdown", { method: "POST" }).catch(() => {});
+        return Promise.resolve("Shutting down");
+      }
+      if (name === "echo") return Promise.resolve(arg);
+      return Promise.resolve("Unknown command. Type #help");
+    }
+    document.getElementById("command-form").addEventListener("submit", (event) => {
+      event.preventDefault();
+      const input = document.getElementById("command-input");
+      const typed = input.value;
+      input.value = "";
+      printCommand(shellPrompt() + " " + typed);
+      Promise.resolve(runCommand(typed)).then((result) => { if (result) printCommand(result); });
+    });
+
+    function popIn(el) {
+      if (!el) return;
+      el.classList.remove("pop");
+      void el.offsetWidth;
+      el.classList.add("pop");
+    }
+    function closeMenu() { document.getElementById("power-menu").hidden = true; }
+    function closeSearch() { document.getElementById("search-panel").hidden = true; }
+    function closeContext() { document.getElementById("context-menu").hidden = true; }
+    document.getElementById("power-btn").addEventListener("click", () => {
+      const menu = document.getElementById("power-menu");
+      menu.hidden = !menu.hidden;
+      if (!menu.hidden) popIn(menu);
+    });
+    document.getElementById("shut-down").addEventListener("click", () => {
+      writeState().finally(() => fetch("/api/shutdown", { method: "POST" }).catch(() => {}));
+    });
+    document.getElementById("restart").addEventListener("click", () => { writeState(); location.reload(); });
+    document.getElementById("files-btn").addEventListener("click", () => {
+      const windowEl = document.getElementById("files-window");
+      if (windowEl.hidden || isHiding(windowEl)) openFiles(filesRel); else minimizeWindow(windowEl);
+    });
+    document.getElementById("settings-btn").addEventListener("click", () => {
+      const windowEl = document.getElementById("settings-window");
+      if (windowEl.hidden || isHiding(windowEl)) openWindow(windowEl); else minimizeWindow(windowEl);
+    });
+    document.getElementById("store-btn").addEventListener("click", () => {
+      const windowEl = document.getElementById("store-window");
+      if (windowEl.hidden || isHiding(windowEl)) openStore(); else minimizeWindow(windowEl);
+    });
+    document.getElementById("tasks-btn").addEventListener("click", () => {
+      const windowEl = document.getElementById("tasks-window");
+      if (windowEl.hidden || isHiding(windowEl)) openTasks(tasksPage || "open"); else minimizeWindow(windowEl);
+    });
+    document.getElementById("tasks-close").addEventListener("click", () => closeWindow(document.getElementById("tasks-window")));
+    ["open", "startup", "health"].forEach((name) => {
+      document.getElementById("task-tab-" + name).addEventListener("click", () => showTasksPage(name));
+    });
+    document.getElementById("battery").addEventListener("click", () => openTasks("health"));
+    document.getElementById("search-btn").addEventListener("click", () => {
+      const panel = document.getElementById("search-panel");
+      panel.hidden = !panel.hidden;
+      if (!panel.hidden) { popIn(panel); document.getElementById("search-input").focus(); }
+    });
+    document.getElementById("search-input").addEventListener("input", (event) => {
+      const q = event.target.value.trim().toLowerCase();
+      const results = document.getElementById("search-results");
+      const builtins = [
+        ["App Store", openStore],
+        ["Task Manager", () => openTasks("open")],
+        ["Command Prompt", () => { openWindow(document.getElementById("command-window")); document.getElementById("command-input").focus(); }],
+        ["Settings", () => openWindow(document.getElementById("settings-window"))],
+        ["OtterOS files", () => openFiles("")]
+      ].filter(([name]) => !q || name.toLowerCase().includes(q));
+      results.replaceChildren();
+      builtins.forEach(([name, run]) => {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.textContent = name;
+        button.addEventListener("click", () => { closeSearch(); run(); });
+        results.appendChild(button);
+      });
+      listFolder("Apps").then((data) => {
+        (data.entries || []).filter((item) => !q || item.name.toLowerCase().includes(q)).forEach((item) => {
+          const button = document.createElement("button");
+          button.type = "button";
+          button.textContent = item.name;
+          button.addEventListener("click", () => { closeSearch(); openEntry("Apps/" + item.name, item.name, item.kind); });
+          results.appendChild(button);
+        });
+      }).catch(() => {});
+    });
+    document.getElementById("files-close").addEventListener("click", () => closeWindow(document.getElementById("files-window")));
+    document.getElementById("files-back").addEventListener("click", () => loadFiles(filesRel.split("/").slice(0, -1).join("/")));
+    document.getElementById("files-new").addEventListener("click", (event) => {
+      const rect = event.currentTarget.getBoundingClientRect();
+      showFolderMenu(rect.left, rect.bottom + 6, filesRel);
+    });
+    document.getElementById("files-path").addEventListener("keydown", (event) => {
+      if (event.key !== "Enter") return;
+      const value = event.target.value.replace(/^OtterOS files\/?/i, "");
+      loadFiles(value);
+    });
+    document.getElementById("editor-close").addEventListener("click", () => closeWindow(document.getElementById("editor-window")));
+    document.getElementById("editor-save").addEventListener("click", () => {
+      if (!editorPath) return;
+      fetch("/api/text?path=" + encodeURIComponent(editorPath), { method: "POST", body: document.getElementById("editor-text").value });
+    });
+    document.getElementById("command-close").addEventListener("click", () => closeWindow(document.getElementById("command-window")));
+    document.getElementById("media-close").addEventListener("click", () => closeWindow(document.getElementById("media-window")));
+    document.getElementById("store-close").addEventListener("click", () => closeWindow(document.getElementById("store-window")));
+    document.getElementById("settings-close").addEventListener("click", () => closeWindow(document.getElementById("settings-window")));
+    ["files-title", "editor-title", "command-title", "media-title", "store-title", "tasks-title", "settings-title"].forEach((id) => {
+      const title = document.getElementById(id);
+      bindDrag(title, title.closest(".files-window"));
+    });
+    document.querySelectorAll(".files-window").forEach((windowEl) => addWindowControls(windowEl));
+    document.getElementById("setting-light").addEventListener("change", (event) => { settings.light = event.target.checked; applySettings(); saveSettings(); });
+    document.getElementById("setting-title").addEventListener("change", (event) => { settings.showTitle = event.target.checked; applySettings(); saveSettings(); });
+    document.getElementById("setting-grid").addEventListener("change", (event) => {
+      settings.grid = event.target.checked;
+      applySettings();
+      if (settings.grid) compactGrid();
+      saveSettings();
+    });
+    document.getElementById("task-size").addEventListener("click", (event) => {
+      const button = event.target.closest(".choice");
+      if (!button) return;
+      settings.taskSize = button.dataset.size;
+      applySettings();
+      saveSettings();
+    });
+    document.getElementById("setting-task-hide").addEventListener("change", (event) => { settings.taskHide = event.target.checked; applySettings(); saveSettings(); });
+    document.getElementById("setting-task-lift").addEventListener("change", (event) => { settings.taskLift = event.target.checked; applySettings(); saveSettings(); });
+    document.getElementById("setting-task-date").addEventListener("change", (event) => { settings.taskDate = event.target.checked; applySettings(); saveSettings(); });
+    const taskbar = document.querySelector(".taskbar");
+    const taskPeek = document.getElementById("task-peek");
+    let taskTimer = 0;
+    function taskMenuOpen() {
+      return !document.getElementById("power-menu").hidden || !document.getElementById("search-panel").hidden;
+    }
+    function showTaskbar() {
+      clearTimeout(taskTimer);
+      taskbar.classList.add("show");
+    }
+    function hideTaskbar() {
+      clearTimeout(taskTimer);
+      taskTimer = setTimeout(() => {
+        if (taskMenuOpen() || taskbar.matches(":hover") || taskPeek.matches(":hover")) return;
+        taskbar.classList.remove("show");
+      }, 320);
+    }
+    taskbar.addEventListener("pointerenter", showTaskbar);
+    taskbar.addEventListener("pointerleave", hideTaskbar);
+    taskPeek.addEventListener("pointerenter", showTaskbar);
+    taskPeek.addEventListener("pointerleave", hideTaskbar);
+    document.getElementById("accent-row").addEventListener("click", (event) => {
+      const button = event.target.closest(".accent");
+      if (!button) return;
+      settings.accent = button.dataset.accent;
+      applySettings(); saveSettings();
+    });
+    document.getElementById("profile-name").addEventListener("change", (event) => { profile.name = event.target.value.trim() || "Otter"; saveProfile(); applyProfile(); });
+    let contextOpenAt = 0;
+    function showActions(x, y, actions) {
+      const menu = document.getElementById("context-menu");
+      menu.replaceChildren();
+      actions.forEach((action) => {
+        if (action === "-" || action[0] === "-") {
+          const rule = document.createElement("div");
+          rule.className = "menu-rule";
+          menu.appendChild(rule);
+          return;
+        }
+        if (action[2] === "label") {
+          const label = document.createElement("div");
+          label.className = "menu-label";
+          label.textContent = action[0];
+          menu.appendChild(label);
+          return;
+        }
+        const button = document.createElement("button");
+        button.type = "button";
+        button.textContent = action[0];
+        button.addEventListener("click", (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          closeContext();
+          action[1]();
+        });
+        menu.appendChild(button);
+      });
+      menu.hidden = false;
+      menu.style.left = "0px";
+      menu.style.top = "0px";
+      const rect = menu.getBoundingClientRect();
+      menu.style.left = Math.max(8, Math.min(x, window.innerWidth - rect.width - 8)) + "px";
+      menu.style.top = Math.max(8, Math.min(y, window.innerHeight - rect.height - 8)) + "px";
+      contextOpenAt = performance.now();
+      popIn(menu);
+    }
+    function parentFolder(rel) {
+      const parts = String(rel || "").split("/").filter(Boolean);
+      parts.pop();
+      return parts.join("/");
+    }
+    function isProtected(rel) {
+      return ["apps", "wallpaper", "desktop", "bin"].indexOf(String(rel || "").toLowerCase()) >= 0;
+    }
+    function inBinPath(rel) {
+      const lower = String(rel || "").toLowerCase();
+      return lower === "bin" || lower.indexOf("bin/") === 0;
+    }
+    function refreshFolder(folder) {
+      if (!document.getElementById("files-window").hidden) loadFiles(filesRel);
+      if (folder === "desktop" || String(folder || "").indexOf("desktop/") === 0 || filesRel === "desktop") {
+        desktopStamp = "";
+        refreshDesktop();
+      }
+    }
+    function createItem(folder, kind) {
+      return fetch("/api/create?path=" + encodeURIComponent(folder || "") + "&kind=" + encodeURIComponent(kind), { method: "POST" })
+        .then((response) => {
+          if (!response.ok) throw new Error("create");
+          return response.json();
+        })
+        .then((saved) => {
+          const name = saved && saved.name;
+          const rel = name ? (folder ? folder + "/" + name : name) : "";
+          if (kind === "folder" && rel && !document.getElementById("files-window").hidden) {
+            loadFiles(rel);
+            if (folder === "desktop" || String(folder || "").indexOf("desktop/") === 0) { desktopStamp = ""; refreshDesktop(); }
+            return;
+          }
+          refreshFolder(folder);
+          if (kind === "txt" && rel) openText(rel, name);
+          else if ((kind === "png" || kind === "mp3" || kind === "mp4") && rel) openMedia(rel, name);
+        })
+        .catch(() => {});
+    }
+    let askResolve = null;
+    function askText(title, message, value, extraMessage) {
+      return new Promise((resolve) => {
+        askResolve = resolve;
+        document.getElementById("ask-title").textContent = title;
+        document.getElementById("ask-message").textContent = message;
+        const input = document.getElementById("ask-input");
+        input.value = value || "";
+        const extra = document.getElementById("ask-extra");
+        const extraMsg = document.getElementById("ask-extra-message");
+        const showExtra = extraMessage != null;
+        extra.hidden = !showExtra;
+        extraMsg.hidden = !showExtra;
+        if (showExtra) {
+          extraMsg.textContent = extraMessage;
+          extra.value = "https://www.google.com";
+          extra.placeholder = "desktop/Note.txt or https://example.com";
+        }
+        document.getElementById("ask-ok").textContent = showExtra ? "Create" : "OK";
+        const layer = document.getElementById("ask-layer");
+        layer.hidden = false;
+        popIn(layer.querySelector(".ask-card"));
+        input.focus();
+        input.select();
+      });
+    }
+    function finishAsk(value) {
+      const resolve = askResolve;
+      askResolve = null;
+      document.getElementById("ask-layer").hidden = true;
+      if (resolve) resolve(value);
+    }
+    document.getElementById("ask-form").addEventListener("submit", (event) => {
+      event.preventDefault();
+      const extra = document.getElementById("ask-extra");
+      const name = document.getElementById("ask-input").value;
+      if (!extra.hidden) {
+        if (!extra.value.trim()) { extra.focus(); return; }
+        finishAsk({ name: name, target: extra.value });
+        return;
+      }
+      finishAsk(name);
+    });
+    document.getElementById("ask-cancel").addEventListener("click", () => finishAsk(null));
+    document.getElementById("ask-layer").addEventListener("pointerdown", (event) => {
+      if (event.target.id === "ask-layer") finishAsk(null);
+    });
+
+    function looksLikeUrl(value) {
+      const text = String(value || "").trim();
+      const lower = text.toLowerCase();
+      if (lower.indexOf("http://") === 0 || lower.indexOf("https://") === 0) return true;
+      if (!text || text.indexOf(" ") >= 0 || text.indexOf("/") === 0 || text.indexOf("\\") >= 0) return false;
+      const host = text.split("/")[0];
+      const dot = host.lastIndexOf(".");
+      return dot > 0 && dot < host.length - 1;
+    }
+    function shortcutHref(raw) {
+      const text = String(raw || "").trim();
+      if (!text) return { url: "https://www.google.com" };
+      if (text.indexOf("/") >= 0 || text.indexOf("\\") >= 0 || text.indexOf(":") === 1) {
+        return { path: text.replace(/^OtterOS files\/?/i, "") };
+      }
+      if (looksLikeUrl(text)) return { url: normalizeUrl(text) || "https://www.google.com" };
+      return { url: "https://www.google.com/search?q=" + encodeURIComponent(text) };
+    }
+    function createShortcut(folder) {
+      askText("New shortcut", "Name", "New shortcut", "Opens").then((answer) => {
+      if (!answer) return;
+      const label = answer.name;
+      let fileName = String(label || "New shortcut").replace(/[\\/:*?"<>|]/g, " ").replace(/\s+/g, " ").trim() || "New shortcut";
+      if (fileName.toLowerCase().slice(-9) !== ".shortcut") fileName += ".shortcut";
+      const where = shortcutHref(answer.target);
+      const title = fileName.replace(/\.shortcut$/i, "");
+      const payload = where.url
+        ? { otterShortcut: true, url: where.url, title: title }
+        : { otterShortcut: true, target: where.path, title: title };
+      fetch("/api/upload?path=" + encodeURIComponent(folder || "") + "&name=" + encodeURIComponent(fileName), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload, null, 2)
+      }).then((response) => {
+        if (!response.ok) return;
+        refreshFolder(folder);
+      }).catch(() => {});
+      });
+    }
+    function newActions(folder) {
+      return [
+        ["New folder", () => createItem(folder, "folder")],
+        ["New text file", () => createItem(folder, "txt")],
+        ["New PNG image", () => createItem(folder, "png")],
+        ["New MP3 audio", () => createItem(folder, "mp3")],
+        ["New MP4 video", () => createItem(folder, "mp4")],
+        ["New shortcut", () => createShortcut(folder)]
+      ];
+    }
+    function deleteItem(rel) {
+      fetch("/api/delete?path=" + encodeURIComponent(rel), { method: "POST" }).then(() => {
+        desktopStamp = "";
+        refreshDesktop();
+        if (!document.getElementById("files-window").hidden) loadFiles(filesRel);
+      });
+    }
+    function renameItem(rel, name) {
+      askText("Rename", "New name", name).then((next) => {
+      if (next === null) return;
+      const clean = String(next || "").trim();
+      if (!clean || clean === name) return;
+      fetch("/api/rename?path=" + encodeURIComponent(rel) + "&name=" + encodeURIComponent(clean), { method: "POST" }).then(() => {
+        desktopStamp = "";
+        refreshDesktop();
+        if (!document.getElementById("files-window").hidden) loadFiles(filesRel);
+      });
+      });
+    }
+    function shortcutToDesktop(rel, name) {
+      const base = String(name || "Shortcut").replace(/\.shortcut$/i, "");
+      const payload = { otterShortcut: true, target: rel };
+      fetch("/api/upload?path=desktop&name=" + encodeURIComponent(base + ".shortcut"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload, null, 2)
+      }).then(() => { desktopStamp = ""; refreshDesktop(); });
+    }
+    function useWallpaper(rel, name) {
+      const parts = rel.split("/");
+      const file = parts.pop();
+      fetch(mediaUrl(parts.join("/"), file)).then((response) => response.blob()).then((blob) => {
+        return fetch("/api/upload?path=Wallpaper&name=" + encodeURIComponent(name), {
+          method: "POST",
+          headers: { "Content-Type": blob.type || "application/octet-stream" },
+          body: blob
+        });
+      }).then(() => refreshWallpaper()).catch(() => {});
+    }
+    function showFolderMenu(x, y, folder) {
+      if (inBinPath(folder)) {
+        showActions(x, y, [
+          ["Empty Bin", () => fetch("/api/bin/clear", { method: "POST" }).then(() => { desktopStamp = ""; refreshDesktop(); loadFiles("Bin"); })],
+          ["Refresh", () => loadFiles(folder)]
+        ]);
+        return;
+      }
+      showActions(x, y, [
+        ["New", null, "label"],
+      ].concat(newActions(folder), [
+        "-",
+        ["Refresh", () => refreshFolder(folder)]
+      ]));
+    }
+    function showItemMenu(x, y, rel, name, kind, folder) {
+      document.querySelectorAll(".file-row.selected").forEach((row) => row.classList.remove("selected"));
+      document.querySelectorAll(".file-row").forEach((row) => {
+        if (row.dataset.rel === rel) row.classList.add("selected");
+      });
+      if (inBinPath(rel)) {
+        showActions(x, y, [
+          ["Open", () => openEntry(rel, name, kind)],
+          ["Restore", () => fetch("/api/restore?path=" + encodeURIComponent(rel), { method: "POST" }).then(() => { desktopStamp = ""; refreshDesktop(); loadFiles("Bin"); })],
+          ["Delete", () => deleteItem(rel)]
+        ]);
+        return;
+      }
+      const actions = [["Open", () => openEntry(rel, name, kind)]];
+      if (!isProtected(rel)) {
+        actions.push(["Rename", () => renameItem(rel, name)]);
+        actions.push(["Delete", () => deleteItem(rel)]);
+      }
+      actions.push(["Copy path", () => { if (navigator.clipboard) navigator.clipboard.writeText(pathText(rel)).catch(() => {}); }]);
+      if (folder !== "desktop") actions.push(["Desktop shortcut", () => shortcutToDesktop(rel, name)]);
+      if (isImage(name)) {
+        actions.push(["Preview", () => openMedia(rel, name)]);
+        actions.push(["Set as wallpaper", () => useWallpaper(rel, name)]);
+      }
+      if (!inBinPath(folder)) actions.push("-", ["New", null, "label"]);
+      const extra = inBinPath(folder) ? [] : newActions(folder);
+      showActions(x, y, actions.concat(extra));
+    }
+    function showContext(x, y, rel, name, kind) {
+      showItemMenu(x, y, rel, name, kind, parentFolder(rel) || "desktop");
+    }
+    document.getElementById("files-window").addEventListener("contextmenu", (event) => {
+      if (event.target.closest(".files-title, .resize, input, textarea")) return;
+      event.preventDefault();
+      const row = event.target.closest(".file-row");
+      if (row && row.dataset.rel) {
+        showItemMenu(event.clientX, event.clientY, row.dataset.rel, row.dataset.name || "", row.dataset.kind || "file", filesRel);
+        return;
+      }
+      showFolderMenu(event.clientX, event.clientY, filesRel);
+    });
+    document.getElementById("desktop").addEventListener("pointerdown", (event) => {
+      if (!event.target.closest(".desk-icon")) selectIcon(null);
+    });
+    document.getElementById("desktop").addEventListener("contextmenu", (event) => {
+      event.preventDefault();
+      const icon = event.target.closest(".desk-icon");
+      if (!icon) {
+        showActions(event.clientX, event.clientY, [
+          ["New", null, "label"]
+        ].concat(newActions("desktop"), [
+          "-",
+          ["Refresh", () => { desktopStamp = ""; refreshDesktop(); refreshWallpaper(); }],
+          ["App Store", () => openStore()],
+          ["Task Manager", () => openTasks("open")]
+        ]));
+        return;
+      }
+      const rel = icon.dataset.rel || "";
+      const name = icon.dataset.name || "Item";
+      const kind = icon.dataset.kind || "file";
+      if (icon.dataset.special === "bin") {
+        showActions(event.clientX, event.clientY, [
+          ["Open", () => openEntry(rel, name, kind)],
+          ["Empty Bin", () => fetch("/api/bin/clear", { method: "POST" }).then(() => { desktopStamp = ""; refreshDesktop(); if (!document.getElementById("files-window").hidden && inBinPath(filesRel)) loadFiles("Bin"); })]
+        ]);
+        return;
+      }
+      showContext(event.clientX, event.clientY, rel, name, kind);
+    });
+    document.getElementById("context-menu").addEventListener("contextmenu", (event) => event.preventDefault());
+    document.addEventListener("keydown", (event) => {
+      if (event.key !== "Escape") return;
+      if (askResolve) { finishAsk(null); return; }
+      closeContext();
+    });
+    document.addEventListener("pointerdown", (event) => {
+      if (!event.target.closest("#power-wrap")) closeMenu();
+      if (!event.target.closest("#search-wrap")) closeSearch();
+      if (event.button !== 0) return;
+      if (performance.now() - contextOpenAt < 400) return;
+      if (!event.target.closest("#context-menu")) closeContext();
+    });
+    document.getElementById("clock").addEventListener("click", () => {});
+    let tasksPage = "open";
+    let startupLaunched = false;
+    function formatBytes(value) {
+      const n = Number(value);
+      if (!Number.isFinite(n) || n < 0) return "";
+      const units = ["B", "KB", "MB", "GB", "TB"];
+      let size = n;
+      let index = 0;
+      while (size >= 1024 && index < units.length - 1) { size /= 1024; index += 1; }
+      return (size >= 10 || index === 0 ? size.toFixed(0) : size.toFixed(1)) + " " + units[index];
+    }
+    function formatUptime(seconds) {
+      const total = Math.max(0, Math.round(Number(seconds) || 0));
+      const days = Math.floor(total / 86400);
+      const hours = Math.floor((total % 86400) / 3600);
+      const minutes = Math.floor((total % 3600) / 60);
+      if (days > 0) return days + "d " + hours + "h";
+      if (hours > 0) return hours + "h " + minutes + "m";
+      return minutes + "m";
+    }
+    function batteryPlugged(status) {
+      return [2, 3, 6, 7, 8, 9].includes(status);
+    }
+    function paintBattery(data) {
+      const button = document.getElementById("battery");
+      const level = document.getElementById("battery-level");
+      const text = document.getElementById("battery-text");
+      if (!button || !level || !text || !data || !Number.isFinite(data.battery)) {
+        if (button) button.hidden = true;
+        return;
+      }
+      const percent = Math.max(0, Math.min(100, Math.round(data.battery)));
+      const plugged = batteryPlugged(data.batteryStatus);
+      button.hidden = false;
+      level.setAttribute("width", String((22 * percent) / 100));
+      level.setAttribute("fill", percent <= 15 && !plugged ? "#ff5d5d" : "currentColor");
+      text.textContent = percent + "%";
+      const title = percent + "% " + (plugged ? "plugged in" : "on battery");
+      button.title = title;
+      button.setAttribute("aria-label", title);
+    }
+    function runningWindows() {
+      return [...document.querySelectorAll(".files-window")].filter((el) => !el.hidden || docked.has(el));
+    }
+    function renderOpenApps() {
+      const host = document.getElementById("task-open");
+      if (!host) return;
+      host.replaceChildren();
+      const title = document.createElement("h3");
+      title.className = "store-section-title";
+      title.textContent = "Apps open";
+      const list = document.createElement("div");
+      list.className = "task-list";
+      const windows = runningWindows();
+      if (!windows.length) {
+        const empty = document.createElement("p");
+        empty.className = "files-empty";
+        empty.textContent = "Nothing is open.";
+        host.append(title, empty);
+        return;
+      }
+      windows.forEach((el) => {
+        const line = document.createElement("div");
+        line.className = "task-row";
+        const name = document.createElement("strong");
+        name.textContent = (el.querySelector("h2") || {}).textContent || "App";
+        const state = document.createElement("span");
+        state.textContent = el.hidden ? "Minimised" : "Open";
+        const show = document.createElement("button");
+        show.type = "button";
+        show.textContent = "Show";
+        show.addEventListener("click", () => openWindow(el));
+        const end = document.createElement("button");
+        end.type = "button";
+        end.className = "task-end";
+        end.textContent = "End";
+        end.addEventListener("click", () => {
+          closeWindow(el);
+          window.setTimeout(renderOpenApps, 220);
+        });
+        line.append(name, state, show, end);
+        list.appendChild(line);
+      });
+      host.append(title, list);
+    }
+    function renderStartup() {
+      const host = document.getElementById("task-startup");
+      if (!host) return;
+      host.replaceChildren();
+      const title = document.createElement("h3");
+      title.className = "store-section-title";
+      title.textContent = "Startup apps";
+      const note = document.createElement("p");
+      note.className = "hint";
+      note.textContent = "Checked apps open after you unlock OtterOS.";
+      const list = document.createElement("div");
+      list.className = "task-list";
+      host.append(title, note, list);
+      Promise.all([listFolder("Apps").catch(() => ({ entries: [] })), listFolder("desktop").catch(() => ({ entries: [] }))]).then(([apps, desk]) => {
+        const rows = [];
+        (apps.entries || []).forEach((entry) => {
+          if (/\.(app|shortcut)$/i.test(entry.name)) rows.push({ label: entry.name.replace(/\.(app|shortcut)$/i, ""), rel: "Apps/" + entry.name });
+        });
+        (desk.entries || []).forEach((entry) => {
+          if (/\.(app|shortcut)$/i.test(entry.name)) rows.push({ label: entry.name.replace(/\.shortcut$/i, ""), rel: "desktop/" + entry.name });
+        });
+        if (!rows.length) {
+          const empty = document.createElement("p");
+          empty.className = "files-empty";
+          empty.textContent = "No apps yet. Get some from the App Store.";
+          list.appendChild(empty);
+          return;
+        }
+        const chosen = new Set(Array.isArray(settings.startup) ? settings.startup : []);
+        rows.forEach((row) => {
+          const line = document.createElement("label");
+          line.className = "task-row";
+          const name = document.createElement("strong");
+          name.textContent = row.label;
+          const input = document.createElement("input");
+          input.type = "checkbox";
+          input.checked = chosen.has(row.rel);
+          input.addEventListener("change", () => {
+            const next = new Set(Array.isArray(settings.startup) ? settings.startup : []);
+            if (input.checked) next.add(row.rel);
+            else next.delete(row.rel);
+            settings.startup = [...next];
+            saveSettings();
+          });
+          line.append(name, input);
+          list.appendChild(line);
+        });
+      });
+    }
+    function healthCard(label, value, percent) {
+      const card = document.createElement("section");
+      card.className = "set-card";
+      const top = document.createElement("div");
+      top.className = "health-stat";
+      const name = document.createElement("strong");
+      name.textContent = label;
+      const detail = document.createElement("span");
+      detail.textContent = value;
+      top.append(name, detail);
+      card.appendChild(top);
+      if (percent != null) {
+        const bar = document.createElement("div");
+        bar.className = "meter";
+        const fill = document.createElement("i");
+        fill.style.width = Math.max(0, Math.min(100, percent)) + "%";
+        bar.appendChild(fill);
+        card.appendChild(bar);
+      }
+      return card;
+    }
+    function paintHealth(data) {
+      const host = document.getElementById("task-health");
+      if (!host) return;
+      host.replaceChildren();
+      const title = document.createElement("h3");
+      title.className = "store-section-title";
+      title.textContent = "Computer health";
+      const grid = document.createElement("div");
+      grid.className = "health-grid";
+      if (!data) {
+        const empty = document.createElement("p");
+        empty.className = "files-empty";
+        empty.textContent = "Couldn't read this computer. Open OtterOS again so the new reader can start.";
+        host.append(title, empty);
+        return;
+      }
+      const memoryPercent = data.memoryTotal ? Math.round((data.memoryUsed / data.memoryTotal) * 100) : null;
+      const diskPercent = data.diskTotal ? Math.round(((data.diskTotal - data.diskFree) / data.diskTotal) * 100) : null;
+      grid.appendChild(healthCard("Processor", data.cpu == null ? "Measuring" : data.cpu + "%", data.cpu));
+      if (data.model) {
+        const model = document.createElement("p");
+        model.className = "hint";
+        model.textContent = data.cores ? data.model + " · " + data.cores + " cores" : data.model;
+        grid.appendChild(model);
+      }
+      grid.appendChild(healthCard("Memory", formatBytes(data.memoryUsed) + " of " + formatBytes(data.memoryTotal), memoryPercent));
+      if (diskPercent != null) grid.appendChild(healthCard("Drive", formatBytes(data.diskFree) + " free of " + formatBytes(data.diskTotal), diskPercent));
+      if (Number.isFinite(data.battery)) {
+        const plugged = batteryPlugged(data.batteryStatus);
+        grid.appendChild(healthCard("Battery", Math.round(data.battery) + "% " + (plugged ? "plugged in" : "on battery"), data.battery));
+      } else {
+        grid.appendChild(healthCard("Battery", "No battery found", null));
+      }
+      grid.appendChild(healthCard(data.hostname || "This PC", "On for " + formatUptime(data.uptime), null));
+      host.append(title, grid);
+    }
+    function refreshHealth() {
+      return fetch("/api/health").then((response) => response.ok ? response.json() : null).catch(() => null).then((data) => {
+        if (data) paintBattery(data);
+        if (tasksPage === "health") paintHealth(data);
+        return data;
+      });
+    }
+    function showTasksPage(page) {
+      tasksPage = page || "open";
+      ["open", "startup", "health"].forEach((name) => {
+        const panel = document.getElementById("task-" + name);
+        const button = document.getElementById("task-tab-" + name);
+        if (panel) panel.hidden = name !== tasksPage;
+        if (button) button.setAttribute("aria-selected", name === tasksPage ? "true" : "false");
+      });
+      if (tasksPage === "open") renderOpenApps();
+      if (tasksPage === "startup") renderStartup();
+      if (tasksPage === "health") refreshHealth();
+    }
+    function openTasks(page) {
+      openWindow(document.getElementById("tasks-window"));
+      showTasksPage(page || tasksPage || "open");
+    }
+    function launchStartup() {
+      if (startupLaunched) return;
+      startupLaunched = true;
+      const list = Array.isArray(settings.startup) ? settings.startup.slice(0, 12) : [];
+      list.forEach((rel, index) => {
+        window.setTimeout(() => openByPath(String(rel || "")), 280 + index * 280);
+      });
+    }
+    function paintTaskIcons() {
+      const icons = {
+        "power-btn": '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3v8"></path><path d="M7.2 6.6a7 7 0 1 0 9.6 0"></path></svg>',
+        "files-btn": '<svg viewBox="0 0 24 24" width="22" height="22"><path fill="#f0c14d" d="M3.5 7.2A1.7 1.7 0 0 1 5.2 5.5H9l1.8 1.8h8a1.7 1.7 0 0 1 1.7 1.7v8.3a1.7 1.7 0 0 1-1.7 1.7H5.2a1.7 1.7 0 0 1-1.7-1.7V7.2z"/></svg>',
+        "settings-btn": '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="12" r="3"></circle><path d="M12 3.2v2.2M12 18.6V21M4.9 6.4l1.6 1.6M17.5 16l1.6 1.6M3.2 12h2.2M18.6 12H21M4.9 17.6l1.6-1.6M17.5 8l1.6-1.6"></path></svg>',
+        "store-btn": '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M6.5 8h11l-.8 11.2a1.2 1.2 0 0 1-1.2 1.1H8.5a1.2 1.2 0 0 1-1.2-1.1L6.5 8z"></path><path d="M9 8V6.8a3 3 0 0 1 6 0V8"></path></svg>',
+        "tasks-btn": '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="4" y="4" width="16" height="16" rx="3"></rect><path d="M8 9h8M8 12h8M8 15h5"></path></svg>',
+        "search-btn": '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="11" cy="11" r="6"></circle><path d="M16 16.5 20 20.5"></path></svg>'
+      };
+      Object.keys(icons).forEach((id) => {
+        const button = document.getElementById(id);
+        if (button) button.innerHTML = icons[id];
+      });
+    }
+    function tick() {
+      const clock = document.getElementById("clock");
+      let time = clock.querySelector(".clock-time");
+      let date = clock.querySelector(".clock-date");
+      if (!time || !date) {
+        clock.replaceChildren();
+        time = document.createElement("span");
+        time.className = "clock-time";
+        date = document.createElement("span");
+        date.className = "clock-date";
+        clock.append(time, date);
+      }
+      const now = new Date();
+      time.textContent = now.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+      date.textContent = now.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" });
+      const lockClock = document.getElementById("lock-clock");
+      if (lockClock) lockClock.textContent = time.textContent;
+    }
+    if (window.otterDesktop && window.otterDesktop.onNewTab) {
+      window.otterDesktop.onNewTab((url) => {
+        if (!/^https?:\/\//i.test(url)) return;
+        openBrowser(url);
+      });
+    }
+    window.addEventListener("beforeunload", () => writeState());
+    loadState().finally(() => {
+      applyProfile();
+      applySettings();
+      paintTaskIcons();
+    document.querySelectorAll(".files-title [aria-label='Close']").forEach((button) => {
+      button.classList.add("win-btn", "win-close");
+      button.innerHTML = closeSvg;
+    });
+    const backButton = document.getElementById("files-back");
+    if (backButton) backButton.innerHTML = backSvg;
+      tick();
+      refreshWallpaper();
+      refreshDesktop();
+      refreshHealth();
+      launchStartup();
+    });
+    setInterval(tick, 1000);
+    setInterval(() => {
+      const win = document.getElementById("tasks-window");
+      if (!win || win.hidden) return;
+      if (tasksPage === "open") renderOpenApps();
+      if (tasksPage === "health") refreshHealth();
+    }, 2000);
+    setInterval(refreshHealth, 20000);
+    setInterval(refreshWallpaper, 4000);
+    setInterval(refreshDesktop, 4000);
+  </script>
+</body>
+</html>
